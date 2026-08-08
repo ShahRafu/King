@@ -1,0 +1,24 @@
+# .gitignore
+
+.gradle/
+/local.properties
+/.idea/
+/build/
+/captures/
+.externalNativeBuild/
+
+# Android Studio
+*.iml
+.idea
+.gradle
+/local.properties
+/.cxx
+
+# Kotlin
+*.kotlin_module
+
+# Build
+/build
+
+# Misc
+*.log
