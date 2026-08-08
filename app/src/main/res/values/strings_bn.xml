@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">King Assistant</string>
+    <string name="voice_orb">এআই ভয়েস অর্ব</string>
+    <string name="login">ভয়েস‑লগইন</string>
+    <string name="send">পাঠান</string>
+    <string name="typing_hint">আপনার বার্তা লিখুন...</string>
+</resources>
