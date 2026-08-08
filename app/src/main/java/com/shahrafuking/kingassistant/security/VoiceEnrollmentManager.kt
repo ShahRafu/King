@@ -10,52 +10,63 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.util.*
+import java.util.Locale
+import kotlin.math.abs
 
 /**
  * VoiceEnrollmentManager
- * - Records multiple audio samples (PCM) and stores file paths
- * - Computes a simple SHA-256 hash over audio bytes as a placeholder "embedding"
- * - Saves VoiceProfileEntity via RoomRepository
+ * - Records short PCM samples from the microphone and saves to app files dir.
+ * - Computes a simple fingerprint via VoiceProcessor (placeholder embedding).
+ * - Enrolls a voice profile (saves via RoomRepository scaffold) and verifies samples.
  *
- * NOTE: This is a scaffold. For production voice biometrics use proper audio embeddings and privacy-preserving storage.
+ * NOTES:
+ * - This is a scaffold for on-device voice enrollment. For production use a proper
+ *   embedding model, anti-spoofing, and secure storage/encryption.
+ * - RoomRepository and VoiceProfileEntity are referenced as existing storage scaffolds.
  */
 class VoiceEnrollmentManager(private val context: Context) {
-    private val TAG = "VoiceEnroll"
+    private val TAG = "VoiceEnrollmentManager"
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
 
+    /**
+     * Record a short PCM16 (little-endian) sample and return the saved file path.
+     * durationMs default 2000ms (2s). Increase if you want longer samples.
+     */
     suspend fun recordSample(sampleName: String, durationMs: Int = 2000): String = withContext(Dispatchers.IO) {
         val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-        val recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, minBuf)
+        val bufferSize = if (minBuf == AudioRecord.ERROR || minBuf == AudioRecord.ERROR_BAD_VALUE) sampleRate * 2 else minBuf
+        val recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize)
 
-        val audioData = ShortArray(minBuf / 2)
-        val file = File(context.filesDir, "voice_samples")
-        if (!file.exists()) file.mkdir()
-        val outFile = File(file, "${sampleName}_${System.currentTimeMillis()}.pcm")
+        val audioData = ShortArray(bufferSize / 2)
+        val samplesDir = File(context.filesDir, "voice_samples")
+        if (!samplesDir.exists()) samplesDir.mkdirs()
+        val outFile = File(samplesDir, "${sampleName}_${System.currentTimeMillis()}.pcm")
 
         try {
             recorder.startRecording()
-            var totalRead = 0
             val fos = FileOutputStream(outFile)
             val endTime = System.currentTimeMillis() + durationMs
             while (System.currentTimeMillis() < endTime) {
                 val read = recorder.read(audioData, 0, audioData.size)
-                totalRead += read
-                // write little-endian PCM16
-                val buffer = ByteArray(read * 2)
-                var idx = 0
-                for (i in 0 until read) {
-                    val s = audioData[i]
-                    buffer[idx++] = (s and 0x00FF).toByte()
-                    buffer[idx++] = ((s.toInt() shr 8) and 0xFF).toByte()
+                if (read > 0) {
+                    // write little-endian PCM16
+                    val buffer = ByteArray(read * 2)
+                    var idx = 0
+                    for (i in 0 until read) {
+                        val s = audioData[i].toInt()
+                        buffer[idx++] = (s and 0x00FF).toByte()
+                        buffer[idx++] = ((s shr 8) and 0xFF).toByte()
+                    }
+                    fos.write(buffer)
                 }
-                fos.write(buffer)
             }
-            fos.flush(); fos.close()
-            recorder.stop(); recorder.release()
-            Log.d(TAG, "Recorded sample to ${outFile.absolutePath} (bytes=$totalRead)")
+            fos.flush()
+            fos.close()
+            recorder.stop()
+            recorder.release()
+            Log.d(TAG, "Recorded sample to ${outFile.absolutePath}")
             return@withContext outFile.absolutePath
         } catch (ex: Exception) {
             try { recorder.release() } catch (_: Exception) {}
@@ -64,43 +75,67 @@ class VoiceEnrollmentManager(private val context: Context) {
         }
     }
 
+    /**
+     * Compute fingerprint (embedding hash) for a saved PCM file using VoiceProcessor.
+     */
     suspend fun computeEmbeddingHash(filePath: String): String = withContext(Dispatchers.IO) {
-        val f = File(filePath)
-        val bytes = f.readBytes()
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(bytes)
-        return@withContext digest.joinToString(separator = "") { String.format(Locale.US, "%02x", it) }
+        return@withContext VoiceProcessor.fingerprintFromPcmFile(filePath, sampleRate = sampleRate, windowSize = 1024, hopSize = 512)
     }
 
-    suspend fun enrollProfile(ownerName: String, samplePaths: List<String>): String {
-        // compute combined hash as placeholder embedding
+    /**
+     * Enroll a new voice profile given ownerName and list of sample file paths.
+     * Returns generated profileId.
+     *
+     * NOTE: This combines sample bytes into a SHA-256 as placeholder embedding.
+     * In production use robust embeddings and protect the stored data.
+     */
+    suspend fun enrollProfile(ownerName: String, samplePaths: List<String>): String = withContext(Dispatchers.IO) {
         val md = MessageDigest.getInstance("SHA-256")
         for (p in samplePaths) {
-            val bytes = File(p).readBytes()
-            md.update(bytes)
+            try {
+                val bytes = File(p).readBytes()
+                md.update(bytes)
+            } catch (ex: Exception) {
+                Log.w(TAG, "Could not read sample $p: ${ex.message}")
+            }
         }
         val embedding = md.digest().joinToString(separator = "") { String.format(Locale.US, "%02x", it) }
         val profileId = "vp_" + System.currentTimeMillis().toString(36)
-        val repo = com.shahrafuking.kingassistant.storage.RoomRepository(context)
-        val entity = com.shahrafuking.kingassistant.storage.room.VoiceProfileEntity(
-            profileId = profileId,
-            ownerName = ownerName,
-            samplePathsCsv = samplePaths.joinToString(","),
-            embeddingHash = embedding
-        )
-        repo.saveVoiceProfile(entity)
-        return profileId
+
+        // save via RoomRepository scaffold (implement repository and entity separately)
+        try {
+            val repo = com.shahrafuking.kingassistant.storage.RoomRepository(context)
+            val entity = com.shahrafuking.kingassistant.storage.room.VoiceProfileEntity(
+                profileId = profileId,
+                ownerName = ownerName,
+                samplePathsCsv = samplePaths.joinToString(","),
+                embeddingHash = embedding
+            )
+            repo.saveVoiceProfile(entity)
+        } catch (ex: Exception) {
+            Log.w(TAG, "RoomRepository not available or save failed: ${ex.message}")
+        }
+
+        return@withContext profileId
     }
 
-    suspend fun verifyVoice(profileId: String, samplePath: String, tolerancePercent: Double = 5.0): Boolean {
-        val repo = com.shahrafuking.kingassistant.storage.RoomRepository(context)
-        val profile = repo.findVoiceProfile(profileId) ?: return false
-        val sampleHash = computeEmbeddingHash(samplePath)
-        // Placeholder comparison: exact equality or small hamming diff of hex strings
-        val dist = hammingDistanceHex(sampleHash, profile.embeddingHash)
-        val maxLen = maxOf(sampleHash.length, profile.embeddingHash.length)
-        val pct = (dist.toDouble() / maxLen.toDouble()) * 100.0
-        return pct <= tolerancePercent
+    /**
+     * Verify a sample against an enrolled profile (placeholder comparison).
+     * Uses Hamming-like difference on hex embedding strings and compares percentage.
+     */
+    suspend fun verifyVoice(profileId: String, samplePath: String, tolerancePercent: Double = 5.0): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val repo = com.shahrafuking.kingassistant.storage.RoomRepository(context)
+            val profile = repo.findVoiceProfile(profileId) ?: return@withContext false
+            val sampleHash = computeEmbeddingHash(samplePath)
+            val dist = hammingDistanceHex(sampleHash, profile.embeddingHash)
+            val maxLen = maxOf(sampleHash.length, profile.embeddingHash.length)
+            val pct = (dist.toDouble() / maxLen.toDouble()) * 100.0
+            return@withContext pct <= tolerancePercent
+        } catch (ex: Exception) {
+            Log.w(TAG, "Verify failed: ${ex.message}")
+            return@withContext false
+        }
     }
 
     private fun hammingDistanceHex(a: String, b: String): Int {
