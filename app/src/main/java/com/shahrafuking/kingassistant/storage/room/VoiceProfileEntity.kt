@@ -7,7 +7,6 @@ import androidx.room.PrimaryKey
 data class VoiceProfileEntity(
     @PrimaryKey val profileId: String,
     val ownerName: String,
-    val samplePathsCsv: String, // comma separated file paths of enrollment samples
-    val embeddingHash: String, // placeholder hash representing enrolled voice-print
-    val createdAt: Long = System.currentTimeMillis()
+    val samplePathsCsv: String,
+    val embeddingHash: String
 )
