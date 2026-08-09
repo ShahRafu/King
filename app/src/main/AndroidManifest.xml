@@ -2,10 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.shahrafuking.kingassistant">
 
-    <!-- Required runtime permissions -->
+    <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Foreground service permission (informational; required on some Android versions) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
@@ -15,7 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true">
 
-        <!-- Main activity (explicitly exported for Android 12+) -->
+        <!-- MainActivity (entrypoint) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -25,10 +24,11 @@
             </intent-filter>
         </activity>
 
-        <!-- OverlayService: foreground service that uses microphone.
-             - android:foregroundServiceType="microphone" is required for microphone usage on newer Android versions.
-             - exported=false to restrict external starts; control via your app only.
-        -->
+        <!-- Enrollment & Verification UIs -->
+        <activity android:name=".ui.EnrollmentActivity" android:exported="false" />
+        <activity android:name=".ui.VerificationActivity" android:exported="false" />
+
+        <!-- OverlayService: foreground service with microphone usage -->
         <service
             android:name=".overlay.OverlayService"
             android:exported="false"
