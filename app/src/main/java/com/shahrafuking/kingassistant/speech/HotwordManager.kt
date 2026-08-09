@@ -1,3 +1,4 @@
+// HotwordManager.kt
 package com.shahrafuking.kingassistant.speech
 
 import android.content.Context
@@ -9,15 +10,20 @@ import android.util.Log
 import com.shahrafuking.kingassistant.audio.AudioRecorder
 import com.shahrafuking.kingassistant.BuildConfig
 import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * HotwordManager
  *
- * - Uses Porcupine (if BuildConfig.PORCUPINE_ENABLED & HotwordPorcupineEngine.init() succeeds)
- *   feeding audio from AudioRecorder to hotword engine.
- * - Otherwise uses SpeechRecognizer fallback configured for Bangla (bn-BD) to detect hotword phrases.
+ * - Primary path: Porcupine adapter (if BuildConfig.PORCUPINE_ENABLED and adapter init succeeds)
+ * - Fallback: Android SpeechRecognizer configured for Bangla (bn-BD) with partial results and simple phrase matching
  *
- * Deliverable: start()/stop(), setListener(), HotwordListener.onHotwordDetected()
+ * API:
+ *   start(), stop(), setListener(listener)
+ *
+ * Notes:
+ *  - Porcupine adapter is optional: provide HotwordPorcupineEngine implementation and add dependency to enable.
+ *  - This class is lifecycle-friendly: multiple start/stop calls are safe.
  */
 class HotwordManager(private val context: Context) {
     private val TAG = "HotwordManager"
@@ -29,30 +35,43 @@ class HotwordManager(private val context: Context) {
     private var listener: HotwordListener? = null
     fun setListener(l: HotwordListener) { listener = l }
 
-    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var audioRecorder: AudioRecorder? = null
     private var porcupineEngine: HotwordPorcupineEngine? = null
 
     private var speechRecognizer: SpeechRecognizer? = null
-    @Volatile private var listening = false
+    @Volatile private var listening = AtomicBoolean(false)
 
     fun start() {
+        if (listening.get()) {
+            Log.i(TAG, "HotwordManager already started")
+            return
+        }
+
+        // Attempt Porcupine path first if enabled in BuildConfig
         if (isPorcupineEnabled()) {
             try {
                 porcupineEngine = HotwordPorcupineEngine(context)
-                val ok = porcupineEngine?.init() ?: false
+                val ok = try {
+                    porcupineEngine?.init() ?: false
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Porcupine init threw", t)
+                    false
+                }
                 if (ok) {
                     startPorcupinePath()
                     Log.i(TAG, "Started Porcupine path")
                     return
                 } else {
-                    Log.w(TAG, "Porcupine init returned false")
+                    Log.w(TAG, "Porcupine path not available; falling back")
                 }
             } catch (t: Throwable) {
-                Log.w(TAG, "Porcupine init exception", t)
+                Log.w(TAG, "Porcupine setup failed", t)
             }
         }
+
+        // Fallback
         startSpeechRecognizerFallback()
         Log.i(TAG, "Started SpeechRecognizer fallback")
     }
@@ -67,24 +86,30 @@ class HotwordManager(private val context: Context) {
         return try { BuildConfig.PORCUPINE_ENABLED } catch (_: Throwable) { false }
     }
 
-    // ---------------- Porcupine path ----------------
+    // ------ Porcupine path --------
     private fun startPorcupinePath() {
-        audioRecorder = AudioRecorder(context)
-        if (!audioRecorder!!.hasRecordPermission()) {
-            Log.w(TAG, "No RECORD_AUDIO permission for Porcupine path")
-            return
-        }
-        audioRecorder!!.start({ pcm16, sampleRate ->
-            try {
-                val detected = porcupineEngine?.process(pcm16, sampleRate) ?: false
-                if (detected) {
-                    Log.i(TAG, "Porcupine detected hotword")
-                    mainScope.launch { listener?.onHotwordDetected() }
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "Porcupine process error", t)
+        try {
+            audioRecorder = AudioRecorder(context)
+            if (!audioRecorder!!.hasRecordPermission()) {
+                Log.w(TAG, "No RECORD_AUDIO permission for Porcupine path")
+                stopPorcupinePath()
+                return
             }
-        }, AudioRecorder.DEFAULT_SAMPLE_RATE)
+            audioRecorder!!.start({ pcm16, sampleRate ->
+                try {
+                    val detected = porcupineEngine?.process(pcm16, sampleRate) ?: false
+                    if (detected) {
+                        Log.i(TAG, "Porcupine detected hotword")
+                        mainScope.launch { listener?.onHotwordDetected() }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Porcupine process error", t)
+                }
+            }, AudioRecorder.DEFAULT_SAMPLE_RATE)
+        } catch (t: Throwable) {
+            Log.w(TAG, "startPorcupinePath error", t)
+            stopPorcupinePath()
+        }
     }
 
     private fun stopPorcupinePath() {
@@ -94,55 +119,74 @@ class HotwordManager(private val context: Context) {
         porcupineEngine = null
     }
 
-    // ------------- SpeechRecognizer fallback (bn-BD) -------------
+    // ------ SpeechRecognizer fallback (bn-BD) ------
     private fun startSpeechRecognizerFallback() {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             Log.w(TAG, "SpeechRecognizer not available")
             return
         }
         stopSpeechRecognizerFallback()
-        listening = true
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-        val intent = RecognizerIntent().apply {
-            action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-BD")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-        }
+        listening.set(true)
 
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onError(error: Int) {
-                Log.w(TAG, "fallback recognizer error: $error")
-                if (listening) mainScope.launch { delay(400); if (listening) startSpeechRecognizerFallback() }
-            }
-            override fun onResults(results: Bundle?) {
-                val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
-                handleTextsForHotword(texts)
-                if (listening) mainScope.launch { delay(200); if (listening) startSpeechRecognizerFallback() }
-            }
-            override fun onPartialResults(partialResults: Bundle?) {
-                val texts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
-                handleTextsForHotword(texts)
-            }
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+        mainScope.launch {
+            try {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                val intent = RecognizerIntent().apply {
+                    action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-BD")
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                }
 
-        try {
-            speechRecognizer?.startListening(intent)
-        } catch (t: Throwable) {
-            Log.w(TAG, "startListening failed", t)
+                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onError(error: Int) {
+                        Log.w(TAG, "fallback recognizer error: $error")
+                        if (listening.get()) {
+                            // brief delay then restart listening
+                            mainScope.launch {
+                                delay(600)
+                                if (listening.get()) restartSpeechRecognizer()
+                            }
+                        }
+                    }
+                    override fun onResults(results: Bundle?) {
+                        val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
+                        handleTextsForHotword(texts)
+                        if (listening.get()) mainScope.launch { delay(200); restartSpeechRecognizer() }
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val texts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
+                        handleTextsForHotword(texts)
+                    }
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+
+                try {
+                    speechRecognizer?.startListening(intent)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "startListening failed", t)
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "speech fallback start error", t)
+            }
         }
     }
 
+    private fun restartSpeechRecognizer() {
+        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Throwable) {}
+        speechRecognizer = null
+        if (listening.get()) startSpeechRecognizerFallback()
+    }
+
     private fun stopSpeechRecognizerFallback() {
-        listening = false
+        listening.set(false)
         try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Throwable) {}
         speechRecognizer = null
     }
