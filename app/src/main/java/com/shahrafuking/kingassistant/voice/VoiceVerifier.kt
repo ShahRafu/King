@@ -10,6 +10,11 @@ class VoiceVerifier(private val context: Context) {
     private val TAG = "VoiceVerifier"
     private val storageKey = "voice_template_v1"
 
+    companion object {
+        // Centralized default threshold for verification (tune this on-device)
+        const val DEFAULT_THRESHOLD = 0.78
+    }
+
     fun saveTemplate(vector: DoubleArray): Boolean {
         try {
             val obj = JSONObject()
@@ -41,7 +46,7 @@ class VoiceVerifier(private val context: Context) {
 
     fun clearTemplate() { KeystoreHelper.clear(context, storageKey) }
 
-    fun verify(sampleVector: DoubleArray, threshold: Double = 0.85): Boolean {
+    fun verify(sampleVector: DoubleArray, threshold: Double = DEFAULT_THRESHOLD): Boolean {
         val template = loadTemplate() ?: return false
         val sim = cosineSimilarity(template, sampleVector)
         Log.i(TAG, "verify similarity=$sim threshold=$threshold")
