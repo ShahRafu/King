@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
 import android.speech.RecognitionListener
@@ -20,7 +21,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
@@ -29,10 +29,17 @@ import kotlinx.coroutines.*
  * OverlayService: Foreground Service that creates a system overlay robot view
  * and runs a SpeechRecognizer to toggle the overlay using voice commands.
  *
- * Notes:
- * - Requires user to grant SYSTEM_ALERT_WINDOW (draw over apps) via Settings.
- * - Requires RECORD_AUDIO runtime permission before starting speech recognition.
- * - Use this for POC only; Play Store policies require explicit UX & disclosure.
+ * Usage:
+ * - Ensure RECORD_AUDIO runtime permission granted and SYSTEM_ALERT_WINDOW enabled in Settings.
+ * - Start service via startForegroundService(intent) with EXTRA_SHOW_OVERLAY=true to show immediately.
+ *
+ * Voice commands recognized (examples):
+ * - "king assistant go to your form"  => show overlay
+ * - "ek ho" (or variants)             => hide overlay
+ *
+ * IMPORTANT:
+ * - This uses Android SpeechRecognizer which may be OEM/battery-sensitive for continuous listening.
+ * - For robust always-on hotword, prefer Porcupine + offline small recognizer.
  */
 class OverlayService : Service() {
     private val TAG = "OverlayService"
@@ -42,20 +49,26 @@ class OverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayRoot: FrameLayout? = null
     private var speechRecognizer: SpeechRecognizer? = null
-    private var isOverlayShown = false
     private var listenJob: Job? = null
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private var isOverlayShown = false
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForeground(NOTIF_ID, createNotification())
-
-        // Start speech recognition loop (only if audio permission granted)
         startSpeechRecognitionLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Optionally start overlay immediately if intent instructs
+        // Handle stop action
+        val action = intent?.action
+        if (action == ACTION_STOP_SERVICE) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         val show = intent?.getBooleanExtra(EXTRA_SHOW_OVERLAY, false) ?: false
         if (show) showOverlay()
         return START_STICKY
@@ -65,6 +78,7 @@ class OverlayService : Service() {
         super.onDestroy()
         hideOverlay()
         stopSpeechRecognitionLoop()
+        mainScope.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -75,19 +89,20 @@ class OverlayService : Service() {
             val channel = NotificationChannel(CHANNEL_ID, "King Overlay", NotificationManager.IMPORTANCE_LOW)
             nm.createNotificationChannel(channel)
         }
-        val stopIntent = Intent(this, OverlayService::class.java).apply {
-            action = ACTION_STOP_SERVICE
-        }
-        val pending = PendingIntent.getService(this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE)
+
+        val stopIntent = Intent(this, OverlayService::class.java).apply { action = ACTION_STOP_SERVICE }
+        val pendingStop = PendingIntent.getService(this, 0, stopIntent,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("King Assistant")
             .setContentText("Overlay service running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", pending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", pendingStop)
             .build()
     }
 
-    private fun showOverlay() {
+    fun showOverlay() {
         if (isOverlayShown) return
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission not granted")
@@ -95,17 +110,14 @@ class OverlayService : Service() {
         }
 
         overlayRoot = FrameLayout(this).apply {
-            alpha = 0.99f
-            // Transparent background
+            // Transparent container
             setBackgroundColor(0x00000000)
         }
 
-        // Simple robot view: a TextView with emoji; replace with animated view or custom layout
         val robotView = TextView(this).apply {
-            text = "\uD83E\uDD16" // robot emoji
-            textSize = 48f
-            setPadding(16, 16, 16, 16)
-            // optional background circle
+            text = "\uD83E\uDD16" // robot emoji - replace with animated view if desired
+            textSize = 56f
+            setPadding(24, 24, 24, 24)
             setBackgroundResource(android.R.drawable.alert_light_frame)
         }
 
@@ -130,7 +142,7 @@ class OverlayService : Service() {
                         val dy = (event.rawY - lastY).toInt()
                         lp.x = initialX + dx
                         lp.y = initialY + dy
-                        windowManager?.updateViewLayout(v, lp)
+                        try { windowManager?.updateViewLayout(v, lp) } catch (_: Exception) {}
                         return true
                     }
                 }
@@ -138,7 +150,6 @@ class OverlayService : Service() {
             }
         })
 
-        // Container for robot (to animate or add more elements)
         overlayRoot?.addView(robotView)
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -150,8 +161,9 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutFlag,
-            // allow touches to this view, but let underlying windows receive events outside region
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -162,8 +174,8 @@ class OverlayService : Service() {
         try {
             windowManager?.addView(overlayRoot, params)
             isOverlayShown = true
-            // Optional: start a simple walking animation coroutine
             startWalkingAnimation(robotView, params)
+            sendBroadcast(Intent(ACTION_OVERLAY_SHOW))
         } catch (t: Throwable) {
             Log.e(TAG, "addView failed", t)
         }
@@ -175,48 +187,41 @@ class OverlayService : Service() {
                 windowManager?.removeView(overlayRoot)
                 overlayRoot = null
                 isOverlayShown = false
+                sendBroadcast(Intent(ACTION_OVERLAY_HIDE))
             }
         } catch (t: Throwable) {
             Log.w(TAG, "hide error", t)
         }
     }
 
-    // Simple periodic movement (walk) across screen margins
     private fun startWalkingAnimation(robotView: View, params: WindowManager.LayoutParams) {
-        // Run a coroutine to slowly nudge robot left-right
-        CoroutineScope(Dispatchers.Main).launch {
+        mainScope.launch {
             try {
                 val screenWidth = resources.displayMetrics.widthPixels
                 var dir = 1
-                while (isOverlayShown) {
-                    delay(1500)
-                    params.x = (0.1f * screenWidth).toInt() + (dir * (0.6f * screenWidth).toInt())
-                    try {
-                        windowManager?.updateViewLayout(robotView, params)
-                    } catch (_: Exception) { }
+                while (isOverlayShown && isActive) {
+                    delay(1400)
+                    params.x = (0.05f * screenWidth).toInt() + (if (dir > 0) (0.6f * screenWidth).toInt() else 0)
+                    try { windowManager?.updateViewLayout(robotView, params) } catch (_: Exception) {}
                     dir *= -1
                 }
-            } catch (t: CancellationException) {
-                // ignore
-            } catch (t: Throwable) {
-                Log.w(TAG, "walk anim error", t)
-            }
+            } catch (_: CancellationException) { }
+            catch (t: Throwable) { Log.w(TAG, "walk anim error", t) }
         }
     }
 
-    // Speech recognition loop: continuously listen and restart when needed.
+    // Speech recognition loop
     private fun startSpeechRecognitionLoop() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             Log.w(TAG, "Speech recognition not available")
             return
         }
         stopSpeechRecognitionLoop()
-        listenJob = CoroutineScope(Dispatchers.Main).launch {
+        listenJob = mainScope.launch {
             while (isActive) {
                 try {
                     startSingleRecognition()
-                    // wait a bit between sessions to avoid brief errors
-                    delay(500)
+                    delay(500) // brief pause between sessions
                 } catch (t: Throwable) {
                     Log.w(TAG, "speech loop error", t)
                     delay(1000)
@@ -233,7 +238,8 @@ class OverlayService : Service() {
     }
 
     private fun startSingleRecognition() {
-        // ensure audio permission granted by host Activity before invoking this method
+        // Caller (Activity) must ensure audio permission already granted
+        speechRecognizer?.destroy()
         val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
         speechRecognizer = recognizer
         val intent = RecognizerIntent().apply {
@@ -243,26 +249,25 @@ class OverlayService : Service() {
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
         recognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { }
-            override fun onBeginningOfSpeech() { }
-            override fun onRmsChanged(rmsdB: Float) { }
-            override fun onBufferReceived(buffer: ByteArray?) { }
-            override fun onEndOfSpeech() { }
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
             override fun onError(error: Int) {
                 Log.w(TAG, "recognizer error: $error")
-                recognizer.cancel()
-                recognizer.destroy()
+                try { recognizer.cancel(); recognizer.destroy() } catch (_: Exception) {}
             }
             override fun onResults(results: Bundle?) {
                 val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
                 handleRecognizedTexts(texts)
-                recognizer.destroy()
+                try { recognizer.destroy() } catch (_: Exception) {}
             }
             override fun onPartialResults(partialResults: Bundle?) {
                 val texts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
                 handleRecognizedTexts(texts)
             }
-            override fun onEvent(eventType: Int, params: Bundle?) { }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
         })
         recognizer.startListening(intent)
     }
@@ -270,17 +275,13 @@ class OverlayService : Service() {
     private fun handleRecognizedTexts(texts: ArrayList<String>) {
         for (t in texts) {
             val low = t.lowercase()
+            // exact phrase matching is brittle; consider fuzzy or wakeword + command recognizer later
             if (low.contains("king assistant go to your form") || low.contains("king assistant go to your form".lowercase())) {
-                // show overlay and optionally close/hide main UI (activity)
                 showOverlay()
-                // optional broadcast so Activity can hide itself
-                sendBroadcast(Intent(ACTION_OVERLAY_SHOW))
                 return
             }
             if (low.contains("ek ho") || low.contains("এক হও") || low.contains("ekho")) {
-                // hide overlay and notify UI
                 hideOverlay()
-                sendBroadcast(Intent(ACTION_OVERLAY_HIDE))
                 return
             }
         }
