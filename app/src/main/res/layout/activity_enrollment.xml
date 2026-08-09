@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/enroll_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enrollment status"
+        android:textSize="16sp" />
+
+    <ProgressBar
+        android:id="@+id/enroll_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="3"
+        android:progress="0"
+        android:layout_marginTop="12dp"/>
+
+    <Button
+        android:id="@+id/enroll_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Enrollment"
+        android:layout_marginTop="20dp"/>
+</LinearLayout>
