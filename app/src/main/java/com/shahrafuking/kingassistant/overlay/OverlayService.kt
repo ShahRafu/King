@@ -1,3 +1,4 @@
+// OverlayService.kt
 package com.shahrafuking.kingassistant.overlay
 
 import android.app.Notification
@@ -5,8 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
-import android.content.Intent
+import android.content.*
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Bundle
@@ -30,13 +30,18 @@ import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * OverlayService (full, integrated)
+ * OverlayService (production-ready, robust)
  *
- * - Uses HotwordManager for hotword detection (Porcupine if enabled; otherwise bn-BD fallback).
- * - Uses a hybrid conversation flow: capture incoming (other-person) speech (auto language), detect & translate -> speak Bengali to owner,
- *   capture owner's Bengali reply (CommandRecognizer), translate owner's reply back to detected language and play.
+ * - Foreground service with notification channel
+ * - HotwordManager hotword detection (Porcupine optional / SpeechRecognizer fallback)
+ * - Conversation flow:
+ *     1) Hotword detected -> capture incoming person's utterance (system ASR)
+ *     2) Detect language & translate -> speak Bengali to owner
+ *     3) Capture owner's Bengali reply -> translate back to detected language and speak
  *
- * Replace your previous OverlayService with this file (path shown in file block header).
+ * Safety & lifecycle:
+ * - Proper start/stop handling
+ * - Panic intent handling: ACTION_PANIC_STOP broadcasts force immediate cleanup
  */
 class OverlayService : Service() {
     private val TAG = "OverlayService"
@@ -51,9 +56,18 @@ class OverlayService : Service() {
     private var conversationRecognizer: SpeechRecognizer? = null
     private var languageTranslator: LanguageTranslator? = null
 
-    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val commandInProgress = AtomicBoolean(false)
-    private var isOverlayShown = false
+    private var isOverlayShown = AtomicBoolean(false)
+
+    private val panicReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_PANIC_STOP) {
+                Log.i(TAG, "Panic stop received")
+                performPanicStop()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -66,10 +80,21 @@ class OverlayService : Service() {
         hotwordManager?.setListener(object : HotwordManager.HotwordListener {
             override fun onHotwordDetected() {
                 Log.i(TAG, "Hotword detected")
-                onHotwordTriggered()
+                mainScope.launch { onHotwordTriggered() }
             }
         })
-        hotwordManager?.start()
+
+        try {
+            hotwordManager?.start()
+        } catch (t: Throwable) {
+            Log.w(TAG, "hotword start failed", t)
+        }
+
+        // register receiver for panic stop (and potential future actions)
+        val filter = IntentFilter().apply {
+            addAction(ACTION_PANIC_STOP)
+        }
+        registerReceiver(panicReceiver, filter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,6 +110,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try { unregisterReceiver(panicReceiver) } catch (_: Exception) {}
         hideOverlay()
         try { hotwordManager?.stop() } catch (_: Throwable) {}
         try { commandRecognizer?.cancel() } catch (_: Throwable) {}
@@ -114,7 +140,7 @@ class OverlayService : Service() {
 
     // ---------------- Overlay UI ----------------
     fun showOverlay() {
-        if (isOverlayShown) return
+        if (isOverlayShown.get()) return
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission not granted")
             return
@@ -173,7 +199,7 @@ class OverlayService : Service() {
 
         try {
             windowManager?.addView(overlayRoot, params)
-            isOverlayShown = true
+            isOverlayShown.set(true)
             startWalkingAnimation(robotView, params)
             sendBroadcast(Intent(ACTION_OVERLAY_SHOW))
         } catch (t: Throwable) {
@@ -183,10 +209,10 @@ class OverlayService : Service() {
 
     private fun hideOverlay() {
         try {
-            if (isOverlayShown) {
+            if (isOverlayShown.get()) {
                 windowManager?.removeView(overlayRoot)
                 overlayRoot = null
-                isOverlayShown = false
+                isOverlayShown.set(false)
                 sendBroadcast(Intent(ACTION_OVERLAY_HIDE))
             }
         } catch (t: Throwable) {
@@ -199,7 +225,7 @@ class OverlayService : Service() {
             try {
                 val screenWidth = resources.displayMetrics.widthPixels
                 var dir = 1
-                while (isOverlayShown && isActive) {
+                while (isOverlayShown.get() && isActive) {
                     delay(1400)
                     params.x = (0.05f * screenWidth).toInt() + (if (dir > 0) (0.6f * screenWidth).toInt() else 0)
                     try { windowManager?.updateViewLayout(robotView, params) } catch (_: Exception) {}
@@ -211,14 +237,18 @@ class OverlayService : Service() {
     }
 
     // ---------------- Conversation flow ----------------
-    private fun onHotwordTriggered() {
+    private suspend fun onHotwordTriggered() {
         if (commandInProgress.get()) {
             Log.i(TAG, "Command in progress; ignoring hotword")
             return
         }
 
-        showOverlay()
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "overlay permission missing; aborting hotword flow")
+            return
+        }
 
+        showOverlay()
         try { hotwordManager?.stop() } catch (_: Throwable) {}
 
         commandInProgress.set(true)
@@ -232,7 +262,14 @@ class OverlayService : Service() {
                         promptOwnerReplyAndRelay("und")
                     } else {
                         // detect & translate to Bengali
-                        val (detectedLang, bengaliText) = languageTranslator?.detectAndTranslateTo(incomingText, "bn") ?: Pair("und", incomingText)
+                        val pair = try {
+                            // detect language then translate to Bengali via translator
+                            runCatching { runBlocking { languageTranslator?.detectAndTranslateTo(incomingText, "bn") } }.getOrNull()
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "detect/translate error", t); null
+                        }
+                        val detectedLang = pair?.first ?: "und"
+                        val bengaliText = pair?.second ?: incomingText
                         Log.i(TAG, "Detected: $detectedLang -> Bengali: $bengaliText")
 
                         // speak Bengali to owner
@@ -290,6 +327,15 @@ class OverlayService : Service() {
         })
         try {
             conversationRecognizer?.startListening(intent)
+            // safety fallback timeout
+            mainScope.launch {
+                delay(7000)
+                try {
+                    conversationRecognizer?.cancel()
+                    conversationRecognizer?.destroy()
+                } catch (_: Throwable) {}
+                cb(null)
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "startListening incoming failed", t)
             try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
@@ -310,10 +356,10 @@ class OverlayService : Service() {
                     try {
                         if (targetLang == "bn" || targetLang.startsWith("bn") || targetLang == "und") {
                             Log.i(TAG, "No back-translation (target=$targetLang)")
-                            // Optionally you could speak the owner's reply aloud in Bengali or log it
+                            // Optionally speak owner's reply back or log
                         } else {
                             // translate owner reply BN -> targetLang and speak
-                            val translated = languageTranslator?.translateOwnerReplyAndSpeak(text, targetLang)
+                            val translated = try { languageTranslator?.translateOwnerReplyAndSpeak(text, targetLang) } catch (t: Throwable) { "" }
                             Log.i(TAG, "Relayed owner reply -> $targetLang: $translated")
                         }
                     } catch (t: Throwable) {
@@ -342,6 +388,16 @@ class OverlayService : Service() {
             delay(500)
             try { hotwordManager?.start() } catch (_: Throwable) {}
         }
+    }
+
+    private fun performPanicStop() {
+        // Immediate aggressive cleanup: stop hotword, cancel recognizers, stop speaking, hide overlay
+        try { hotwordManager?.stop() } catch (_: Throwable) {}
+        try { conversationRecognizer?.cancel(); conversationRecognizer?.destroy() } catch (_: Throwable) {}
+        try { commandRecognizer?.cancel() } catch (_: Throwable) {}
+        try { languageTranslator?.shutdown() } catch (_: Throwable) {}
+        try { hideOverlay() } catch (_: Throwable) {}
+        commandInProgress.set(false)
     }
 
     companion object {
