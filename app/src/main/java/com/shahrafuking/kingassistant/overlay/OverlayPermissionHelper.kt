@@ -7,8 +7,8 @@ import android.os.Build
 import android.provider.Settings
 
 /**
- * Helper: call requestOverlayPermission(activity, requestCode)
- * Then handle Activity.onActivityResult to confirm via Settings.canDrawOverlays(...)
+ * Helper to open the system settings page for 'Draw over other apps' permission.
+ * Usage: OverlayPermissionHelper.requestOverlayPermission(activity, requestCode)
  */
 object OverlayPermissionHelper {
     fun requestOverlayPermission(activity: Activity, requestCode: Int) {
