@@ -1,3 +1,4 @@
+// LanguageTranslator.kt
 package com.shahrafuking.kingassistant.speech
 
 import android.content.Context
@@ -15,6 +16,7 @@ import okhttp3.RequestBody
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -22,18 +24,15 @@ import kotlin.coroutines.suspendCoroutine
 /**
  * LanguageTranslator
  *
- * - detectLanguage(text): uses ML Kit language identification to return language code (e.g., "en", "bn").
- * - translate(text, source, target): uses LibreTranslate HTTP API (demo) to translate text.
- * - speak(text, localeTag): uses Android TextToSpeech to speak text in the requested locale (best effort).
+ * Responsibilities:
+ *  - detectLanguage(text): ML Kit language id (suspend)
+ *  - translate(text, source, target): simple HTTP translator with retries & timeouts (suspend)
+ *  - speakSafely(text, localeTag): Android TTS with thread-safe queueing and lifecycle
  *
- * Usage:
- *   val lt = LanguageTranslator(context)
- *   val lang = lt.detectLanguage(text) // suspend
- *   val translated = lt.translate(text, lang, "bn")
- *   lt.speak(translated, "bn-BD")
- *
- * NOTE: For production use you should replace LibreTranslate endpoint with a reliable paid translator (Google/Azure/DeepL)
- * and manage API keys in local.properties/secure storage.
+ * NOTE:
+ *  - Default translator endpoint is LibreTranslate demo instance. Replace with production provider
+ *    (Google/Azure/DeepL etc) and supply credentials via secure secret manager.
+ *  - Keep network calls off the main thread (we use Dispatchers.IO).
  */
 class LanguageTranslator(private val context: Context) {
     private val TAG = "LanguageTranslator"
@@ -41,20 +40,47 @@ class LanguageTranslator(private val context: Context) {
     // ML Kit language identifier
     private val languageIdentifier = LanguageIdentification.getClient(
         LanguageIdentificationOptions.Builder()
-            .setTrustedThreshold(0.60f) // tweak threshold as needed
+            .setTrustedThreshold(0.60f)
             .build()
     )
 
-    // OkHttp client for translate HTTP calls
+    // OkHttp client with sensible timeouts
     private val httpClient = OkHttpClient.Builder()
-        .callTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(20, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
-    // TextToSpeech
-    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
-        if (status != TextToSpeech.SUCCESS) {
-            Log.w(TAG, "TTS init failed: $status")
+    // Default translation endpoint (fallback/demo). Replace in production.
+    private val defaultTranslateEndpoint = "https://libretranslate.de/translate"
+
+    // TTS and lifecycle control
+    @Volatile private var tts: TextToSpeech? = null
+    private val ttsInitialized = AtomicBoolean(false)
+    private val ttsLock = Object()
+
+    init {
+        // Initialize lazily - do not block construction
+        ensureTtsInitialized()
+    }
+
+    private fun ensureTtsInitialized() {
+        if (ttsInitialized.get()) return
+        synchronized(ttsLock) {
+            if (ttsInitialized.get()) return
+            try {
+                tts = TextToSpeech(context.applicationContext) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        ttsInitialized.set(true)
+                        Log.i(TAG, "TTS initialized")
+                    } else {
+                        Log.w(TAG, "TTS init failed: $status")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "TTS init exception", t)
+            }
         }
     }
 
@@ -63,65 +89,67 @@ class LanguageTranslator(private val context: Context) {
         suspendCoroutine { cont ->
             languageIdentifier.identifyLanguage(text)
                 .addOnSuccessListener { lang ->
-                    if (lang == "und") {
-                        cont.resume("und")
-                    } else {
-                        cont.resume(lang)
-                    }
+                    if (lang == "und") cont.resume("und") else cont.resume(lang)
                 }
-                .addOnFailureListener { e ->
-                    cont.resumeWithException(e)
-                }
+                .addOnFailureListener { e -> cont.resumeWithException(e) }
         }
     }
 
     /**
-     * Translate text. Returns translated string.
-     * Uses LibreTranslate demo endpoint by default.
-     * Replace endpoint & headers for production provider.
+     * Translate text with lightweight retry/backoff logic.
+     * Returns translated string or empty string on failure.
      */
     suspend fun translate(text: String, sourceLang: String, targetLang: String): String = withContext(Dispatchers.IO) {
-        try {
-            val endpoint = "https://libretranslate.de/translate" // demo; change to your instance or provider
-            val json = JSONObject().apply {
-                put("q", text)
-                // LibreTranslate accepts source="auto" or explicit code
-                put("source", if (sourceLang == "und") "auto" else sourceLang)
-                put("target", targetLang)
-                put("format", "text")
-            }
-            val body = RequestBody.create("application/json; charset=utf-8".toMediaType(), json.toString())
-            val req = Request.Builder()
-                .url(endpoint)
-                .post(body)
-                .build()
-            httpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    Log.w(TAG, "translate failed: ${resp.code} ${resp.message}")
-                    return@withContext ""
-                }
-                val respBody = resp.body?.string() ?: ""
-                val obj = JSONObject(respBody)
-                val translated = obj.optString("translatedText", "")
-                return@withContext translated
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "translate error", t)
-            return@withContext ""
+        if (text.isBlank()) return@withContext ""
+        val endpoint = defaultTranslateEndpoint
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        // Prepare JSON body per LibreTranslate API; adapt if using different provider
+        val jsonBody = JSONObject().apply {
+            put("q", text)
+            put("source", if (sourceLang == "und") "auto" else sourceLang)
+            put("target", targetLang)
+            put("format", "text")
         }
+        val body = RequestBody.create(mediaType, jsonBody.toString())
+        val req = Request.Builder().url(endpoint).post(body).build()
+
+        var attempt = 0
+        val maxRetries = 2
+        var lastErr: Throwable? = null
+        while (attempt <= maxRetries) {
+            try {
+                httpClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) {
+                        Log.w(TAG, "translate failed: ${resp.code} ${resp.message}")
+                        return@withContext ""
+                    }
+                    val respBody = resp.body?.string() ?: ""
+                    if (respBody.isBlank()) return@withContext ""
+                    val obj = JSONObject(respBody)
+                    val translated = obj.optString("translatedText", "")
+                    return@withContext translated
+                }
+            } catch (t: Throwable) {
+                lastErr = t
+                attempt++
+                // simple backoff
+                try { Thread.sleep(300L * attempt) } catch (_: InterruptedException) {}
+            }
+        }
+        Log.w(TAG, "translate failed after retries", lastErr)
+        return@withContext ""
     }
 
     /**
      * Convenience: detect language then translate to targetLang if needed.
-     * Returns Pair(detectedLang, translatedText) where translatedText is original if no translation performed.
+     * Returns Pair(detectedLang, translatedText) where translatedText is original if translation skipped or fails.
      */
     suspend fun detectAndTranslateTo(text: String, targetLang: String): Pair<String, String> {
         val detected = try { detectLanguage(text) } catch (t: Throwable) { "und" }
-        if (detected == "bn" || detected.startsWith("bn")) {
-            // already Bengali — no translation needed
+        if (detected == targetLang || (detected != "und" && detected.startsWith(targetLang))) {
+            // already the target language (or same prefix)
             return Pair(detected, text)
         }
-        // attempt translation
         val translated = try { translate(text, detected, targetLang) } catch (t: Throwable) { "" }
         return Pair(detected, if (translated.isNotBlank()) translated else text)
     }
@@ -141,23 +169,32 @@ class LanguageTranslator(private val context: Context) {
     }
 
     /**
-     * Speak the given text using TTS. Tries to set locale by language tag (e.g., "bn-BD" or "en-US" or "hi-IN").
-     * Use speakSafely to handle main thread invocation.
+     * Speak the given text using TTS. Tries to set locale by language tag (e.g., "bn-BD" or "en-US").
+     * This method is thread-safe and non-blocking.
      */
     fun speakSafely(text: String, localeTag: String) {
+        if (text.isBlank()) return
+        ensureTtsInitialized()
+        val localTts = tts ?: return
         try {
             val locale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 Locale.forLanguageTag(localeTag)
             } else {
-                // fallback: split tag like "bn-BD" -> language "bn"
                 val lang = localeTag.split("-").firstOrNull() ?: "bn"
                 Locale(lang)
             }
-            val res = tts.setLanguage(locale)
+            val res = try { localTts.setLanguage(locale) } catch (t: Throwable) { TextToSpeech.LANG_NOT_SUPPORTED }
             if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.w(TAG, "TTS locale not supported: $localeTag, fallback to default")
+                Log.w(TAG, "TTS locale not supported: $localeTag; using default")
             }
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "lang_id_${System.currentTimeMillis()}")
+            // Use utteranceId for completion tracking if needed
+            val uttId = "utt_${System.currentTimeMillis()}"
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                localTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, uttId)
+            } else {
+                localTts.speak(text, TextToSpeech.QUEUE_FLUSH, null)
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "speakSafely error", t)
         }
@@ -165,11 +202,11 @@ class LanguageTranslator(private val context: Context) {
 
     fun shutdown() {
         try {
-            tts.stop()
-            tts.shutdown()
+            tts?.stop()
+            tts?.shutdown()
         } catch (_: Throwable) {}
-        try {
-            languageIdentifier.close()
-        } catch (_: Throwable) {}
+        tts = null
+        ttsInitialized.set(false)
+        try { languageIdentifier.close() } catch (_: Throwable) {}
     }
 }
