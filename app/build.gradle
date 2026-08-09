@@ -1,6 +1,7 @@
 // Simple module-level Gradle build file for the Android app module (groovy)
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
 
 /*
  * PORCUPINE_* values can be supplied via:
@@ -79,4 +80,12 @@ dependencies {
 
     // Porcupine SDK placeholder - uncomment & set correct version when ready:
     // implementation 'ai.picovoice:porcupine-android:VERSION'
+
+    // Room (local database for Memory module)
+    implementation "androidx.room:room-runtime:2.5.2"
+    implementation "androidx.room:room-ktx:2.5.2"
+    kapt "androidx.room:room-compiler:2.5.2"
+
+    // Optional: room testing helpers (uncomment in test configuration if needed)
+    // testImplementation "androidx.room:room-testing:2.5.2"
 }
