@@ -2,7 +2,6 @@ package com.shahrafuking.kingassistant.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
