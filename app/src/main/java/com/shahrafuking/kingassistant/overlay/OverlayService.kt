@@ -12,6 +12,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
+import android.speech.RecognizerIntent
+import android.speech.RecognitionListener
+import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -22,20 +25,18 @@ import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.shahrafuking.kingassistant.speech.CommandRecognizer
 import com.shahrafuking.kingassistant.speech.HotwordManager
+import com.shahrafuking.kingassistant.speech.LanguageTranslator
 import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * OverlayService (updated)
+ * OverlayService (full, integrated)
  *
- * - Replaces previous continuous SpeechRecognizer loop with HotwordManager + CommandRecognizer.
- * - HotwordManager tries Porcupine (if enabled) otherwise uses Android SpeechRecognizer fallback,
- *   and both are configured to match Bangla (bn-BD) via the HotwordManager/CommandRecognizer implementations.
- * - When hotword is detected, this service starts a one-shot Bengali command recognition session
- *   (CommandRecognizer) and handles the returned Bangla text in handleVoiceCommand().
+ * - Uses HotwordManager for hotword detection (Porcupine if enabled; otherwise bn-BD fallback).
+ * - Uses a hybrid conversation flow: capture incoming (other-person) speech (auto language), detect & translate -> speak Bengali to owner,
+ *   capture owner's Bengali reply (CommandRecognizer), translate owner's reply back to detected language and play.
  *
- * Important:
- * - Activity must grant RECORD_AUDIO at runtime before starting this service.
- * - Activity must guide user to enable SYSTEM_ALERT_WINDOW (draw over other apps) before showing overlay.
+ * Replace your previous OverlayService with this file (path shown in file block header).
  */
 class OverlayService : Service() {
     private val TAG = "OverlayService"
@@ -45,39 +46,38 @@ class OverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayRoot: FrameLayout? = null
 
-    // Hotword + command pieces
     private var hotwordManager: HotwordManager? = null
     private var commandRecognizer: CommandRecognizer? = null
-    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var conversationRecognizer: SpeechRecognizer? = null
+    private var languageTranslator: LanguageTranslator? = null
 
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val commandInProgress = AtomicBoolean(false)
     private var isOverlayShown = false
-    private var commandInProgress = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForeground(NOTIF_ID, createNotification())
 
-        // Initialize HotwordManager and listen for hotword events
+        languageTranslator = LanguageTranslator(applicationContext)
+
         hotwordManager = HotwordManager(applicationContext)
         hotwordManager?.setListener(object : HotwordManager.HotwordListener {
             override fun onHotwordDetected() {
-                Log.i(TAG, "Hotword detected (service)")
+                Log.i(TAG, "Hotword detected")
                 onHotwordTriggered()
             }
         })
-        // HotwordManager will try Porcupine if enabled; otherwise falls back to bn-BD speech recognizer.
         hotwordManager?.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Handle stop action
         val action = intent?.action
         if (action == ACTION_STOP_SERVICE) {
             stopSelf()
             return START_NOT_STICKY
         }
-
         val show = intent?.getBooleanExtra(EXTRA_SHOW_OVERLAY, false) ?: false
         if (show) showOverlay()
         return START_STICKY
@@ -86,10 +86,10 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         hideOverlay()
-        try {
-            hotwordManager?.stop()
-        } catch (_: Throwable) {}
-        commandRecognizer?.cancel()
+        try { hotwordManager?.stop() } catch (_: Throwable) {}
+        try { commandRecognizer?.cancel() } catch (_: Throwable) {}
+        try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
+        try { languageTranslator?.shutdown() } catch (_: Throwable) {}
         mainScope.cancel()
     }
 
@@ -101,11 +101,9 @@ class OverlayService : Service() {
             val channel = NotificationChannel(CHANNEL_ID, "King Overlay", NotificationManager.IMPORTANCE_LOW)
             nm.createNotificationChannel(channel)
         }
-
         val stopIntent = Intent(this, OverlayService::class.java).apply { action = ACTION_STOP_SERVICE }
         val pendingStop = PendingIntent.getService(this, 0, stopIntent,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("King Assistant")
             .setContentText("Overlay service running")
@@ -114,9 +112,7 @@ class OverlayService : Service() {
             .build()
     }
 
-    // --------------------------
-    // Overlay view handling
-    // --------------------------
+    // ---------------- Overlay UI ----------------
     fun showOverlay() {
         if (isOverlayShown) return
         if (!Settings.canDrawOverlays(this)) {
@@ -124,12 +120,10 @@ class OverlayService : Service() {
             return
         }
 
-        overlayRoot = FrameLayout(this).apply {
-            setBackgroundColor(0x00000000) // transparent container
-        }
+        overlayRoot = FrameLayout(this).apply { setBackgroundColor(0x00000000) }
 
         val robotView = TextView(this).apply {
-            text = "\uD83E\uDD16" // robot emoji placeholder; replace with animated view if desired
+            text = "\uD83E\uDD16"
             textSize = 56f
             setPadding(24, 24, 24, 24)
             setBackgroundResource(android.R.drawable.alert_light_frame)
@@ -144,17 +138,14 @@ class OverlayService : Service() {
                 val lp = v.layoutParams as WindowManager.LayoutParams
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        lastX = event.rawX
-                        lastY = event.rawY
-                        initialX = lp.x
-                        initialY = lp.y
+                        lastX = event.rawX; lastY = event.rawY
+                        initialX = lp.x; initialY = lp.y
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val dx = (event.rawX - lastX).toInt()
                         val dy = (event.rawY - lastY).toInt()
-                        lp.x = initialX + dx
-                        lp.y = initialY + dy
+                        lp.x = initialX + dx; lp.y = initialY + dy
                         try { windowManager?.updateViewLayout(v, lp) } catch (_: Exception) {}
                         return true
                     }
@@ -167,21 +158,17 @@ class OverlayService : Service() {
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            WindowManager.LayoutParams.TYPE_PHONE
+        else WindowManager.LayoutParams.TYPE_PHONE
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 300
+            x = 100; y = 300
         }
 
         try {
@@ -223,34 +210,122 @@ class OverlayService : Service() {
         }
     }
 
-    // --------------------------
-    // Hotword -> Command flow
-    // --------------------------
+    // ---------------- Conversation flow ----------------
     private fun onHotwordTriggered() {
-        // prevent overlapping command sessions
         if (commandInProgress.get()) {
-            Log.i(TAG, "command already in progress, ignoring hotword")
+            Log.i(TAG, "Command in progress; ignoring hotword")
             return
         }
 
-        // Optionally show overlay when hotword detected
         showOverlay()
 
-        // Temporarily pause hotword manager to avoid double triggers while recognizing command
         try { hotwordManager?.stop() } catch (_: Throwable) {}
 
         commandInProgress.set(true)
 
+        // 1) capture incoming person's utterance (auto language)
+        captureOneShotIncomingSpeech { incomingText ->
+            mainScope.launch {
+                try {
+                    if (incomingText.isNullOrBlank()) {
+                        Log.i(TAG, "No incoming speech; prompt owner reply directly")
+                        promptOwnerReplyAndRelay("und")
+                    } else {
+                        // detect & translate to Bengali
+                        val (detectedLang, bengaliText) = languageTranslator?.detectAndTranslateTo(incomingText, "bn") ?: Pair("und", incomingText)
+                        Log.i(TAG, "Detected: $detectedLang -> Bengali: $bengaliText")
+
+                        // speak Bengali to owner
+                        if (!bengaliText.isNullOrBlank()) {
+                            languageTranslator?.speakSafely(bengaliText, "bn-BD")
+                        }
+                        // then prompt owner to reply and relay
+                        promptOwnerReplyAndRelay(detectedLang)
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "conversation error", t)
+                    cleanupCommandSession()
+                }
+            }
+        }
+    }
+
+    /**
+     * Capture one incoming utterance (no forced language).
+     * Returns recognized text or null via callback.
+     */
+    private fun captureOneShotIncomingSpeech(cb: (String?) -> Unit) {
+        try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.w(TAG, "SpeechRecognizer unavailable for incoming capture")
+            cb(null); return
+        }
+        conversationRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        val intent = RecognizerIntent().apply {
+            action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            // DO NOT force language -> let system return best text
+        }
+        conversationRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onError(error: Int) {
+                Log.w(TAG, "incoming recognizer error: $error")
+                try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
+                cb(null)
+            }
+            override fun onResults(results: Bundle?) {
+                val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val result = texts?.firstOrNull()
+                try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
+                cb(result)
+            }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        try {
+            conversationRecognizer?.startListening(intent)
+        } catch (t: Throwable) {
+            Log.w(TAG, "startListening incoming failed", t)
+            try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
+            cb(null)
+        }
+    }
+
+    /**
+     * Prompt owner to reply (captured in Bengali) and relay back to targetLang.
+     */
+    private fun promptOwnerReplyAndRelay(targetLang: String) {
+        try { commandRecognizer?.cancel() } catch (_: Throwable) {}
         commandRecognizer = CommandRecognizer(applicationContext)
         commandRecognizer?.listenOnce(object : CommandRecognizer.CommandListener {
             override fun onCommandResult(text: String) {
-                Log.i(TAG, "Command recognized (bn-BD): $text")
-                handleVoiceCommand(text)
-                cleanupCommandSession()
+                Log.i(TAG, "Owner replied (bn): $text")
+                mainScope.launch {
+                    try {
+                        if (targetLang == "bn" || targetLang.startsWith("bn") || targetLang == "und") {
+                            Log.i(TAG, "No back-translation (target=$targetLang)")
+                            // Optionally you could speak the owner's reply aloud in Bengali or log it
+                        } else {
+                            // translate owner reply BN -> targetLang and speak
+                            val translated = languageTranslator?.translateOwnerReplyAndSpeak(text, targetLang)
+                            Log.i(TAG, "Relayed owner reply -> $targetLang: $translated")
+                        }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "reply relay error", t)
+                    } finally {
+                        cleanupCommandSession()
+                    }
+                }
             }
 
             override fun onCommandError(reason: String) {
-                Log.w(TAG, "Command error: $reason")
+                Log.w(TAG, "Owner command error: $reason")
                 cleanupCommandSession()
             }
         })
@@ -258,7 +333,9 @@ class OverlayService : Service() {
 
     private fun cleanupCommandSession() {
         try { commandRecognizer?.cancel() } catch (_: Throwable) {}
+        try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
         commandRecognizer = null
+        conversationRecognizer = null
         commandInProgress.set(false)
         // restart hotword listening after brief delay
         mainScope.launch {
@@ -267,58 +344,11 @@ class OverlayService : Service() {
         }
     }
 
-    /**
-     * Parse Bangla (bn-BD) commands and execute actions.
-     * Keep parsing focused and conservative — expand as you add more commands.
-     */
-    private fun handleVoiceCommand(text: String) {
-        val low = text.lowercase().trim()
-        // Deactivation commands: "King Assistant এখন জিরিয়ে নাও" / "King Assistant ঘুমিয়ে যাও" / "এক হও"
-        if (low.contains("এক হও") || low.contains("ek ho") || low.contains("একহো") ||
-            low.contains("কিং অ্যাসিস্ট্যান্ট ঘুমিয়ে") || low.contains("কিং অ্যাসিস্ট্যান্ট এখন জিরিয়ে")) {
-            Log.i(TAG, "Voice command -> deactivate/stop service")
-            // Stop overlay and optionally stop service
-            hideOverlay()
-            stopSelf()
-            return
-        }
-
-        // Overlay hide command (Bangla variants)
-        if (low.contains("বন্ধ কর") || low.contains("থামো") || low.contains("বন্ধ")) {
-            Log.i(TAG, "Voice command -> hide overlay")
-            hideOverlay()
-            return
-        }
-
-        // Example panic stop (trades) placeholder
-        if (low.contains("সব ট্রেড বন্ধ কর") || low.contains("সব ট্রেড থামাও") || low.contains("panic stop")) {
-            Log.i(TAG, "Voice command -> PANIC STOP (placeholder)")
-            // TODO: Hook into trading module to stop active trades
-            // For now, broadcast or log
-            sendBroadcast(Intent(ACTION_PANIC_STOP))
-            return
-        }
-
-        // Example: request status
-        if (low.contains("তোমার অবস্থা") || low.contains("কি করছ") || low.contains("স্ট্যাটাস")) {
-            Log.i(TAG, "Voice command -> status request")
-            // You can broadcast or update notification
-            // For demo: just log
-            return
-        }
-
-        // If command not recognized, you can show/voice a prompt or ignore
-        Log.i(TAG, "Voice command not matched: $text")
-    }
-
     companion object {
         const val ACTION_STOP_SERVICE = "king.overlay.STOP"
         const val EXTRA_SHOW_OVERLAY = "extra_show_overlay"
-
         const val ACTION_OVERLAY_SHOW = "king.overlay.SHOWED"
         const val ACTION_OVERLAY_HIDE = "king.overlay.HIDDEN"
-
-        // Example broadcast for panic stop hook
         const val ACTION_PANIC_STOP = "king.overlay.PANIC_STOP"
     }
 }
