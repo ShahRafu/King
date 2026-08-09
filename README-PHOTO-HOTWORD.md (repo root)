@@ -1,38 +1,20 @@
 # King Assistant - Hotword POC
 
-This branch implements a hotword Proof‑of‑Concept (POC) and provides a device‑first
-skeleton targeted to your itel S25 (Android 15). It focuses on a modular, portable
-architecture so core logic can be migrated later to desktop/laptop engines.
+This branch implements a hotword Proof‑of‑Concept (POC) targeted to your itel S25 (Android 15).
 
-Key points in this branch (feature/hotword-poc):
+Quick checklist to enable Porcupine:
+1. Put keyword file under: app/src/main/assets/porcupine/<your_keyword.ppn>
+2. In app/build.gradle set PORCUPINE_ENABLED to true (or use gradle properties/local.properties)
+3. Add Porcupine dependency to app/build.gradle (check Picovoice docs for the exact artifact & version)
+4. Add PORCUPINE_ACCESS_KEY to local.properties or as a BuildConfig via Gradle
 
-- targetSdk: 35 (Android 15)
-- Hotword engine placeholder: Porcupine (Picovoice) — add official dependency and key to enable
-- Foreground service (WakewordService) + Audio recorder wrapper
-- Platform Adapter interfaces to keep core logic portable
-- Plugin loader placeholder for future plugin support
-- GitHub Actions workflow that builds an APK artifact on push/PR
+Build & test (local):
+1. ./gradlew assembleDebug
+2. adb install -r app/build/outputs/apk/debug/app-debug.apk
+3. adb shell am start -n com.shahrafuking.kingassistant/.ui.HotwordTestActivity
+4. From UI: Init Engine -> then speak the keyword (or use WakewordService once implemented)
+5. View logs: adb logcat | grep -E "Porcupine|HotwordEngine|Hotword"
 
-How to enable Porcupine (placeholder):
-1. Add PORCOVINE_KEY to local.properties in the format:
-   PORCOVINE_KEY=your_porcover_key_here
-2. Add the Porcupine Android dependency in app/build.gradle dependencies (uncomment and set correct version).
-3. Rebuild the project.
-
-Security & legal notes:
-- This POC avoids including any autoclick/IP‑rotation/trade automation code. Those
-  features carry legal and TOU risks and must be designed and approved separately.
-- Never commit API keys or secrets. Use local.properties for local builds and GitHub Secrets
-  for CI (Actions) if you want signed APKs or cloud keys.
-
-Testing on itel S25 (ADB):
-1. Enable Developer options and USB debugging on the phone.
-2. Connect phone via USB and run:
-   ./gradlew assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-3. Open HotwordTestActivity from launcher (if added) and follow UI to init engine and simulate detection.
-
-Next steps after this POC:
-- Implement real Porcupine adapter (or Vosk) and a secure voice‑biometric enrollment flow.
-- Add Room DB for permanent memory and WorkManager‑based sync.
-- Add Accessibility skeleton (with safety checks) if you later choose to add automation.
+Security notes:
+- Do NOT commit API keys or keyword files in the repo.
+- Porcupine is optional; keep PORCUPINE_ENABLED=false to remain buildable without the dependency.
