@@ -2,8 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.shahrafuking.kingassistant">
 
-    <!-- runtime permission for audio (SpeechRecognizer) -->
+    <!-- Required runtime permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Foreground service permission (informational; required on some Android versions) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
         android:allowBackup="true"
@@ -12,16 +15,23 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true">
 
-        <activity android:name=".MainActivity">
+        <!-- Main activity (explicitly exported for Android 12+) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- OverlayService declaration -->
+        <!-- OverlayService: foreground service that uses microphone.
+             - android:foregroundServiceType="microphone" is required for microphone usage on newer Android versions.
+             - exported=false to restrict external starts; control via your app only.
+        -->
         <service
             android:name=".overlay.OverlayService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>
