@@ -11,7 +11,7 @@ class VoiceVerifier(private val context: Context) {
     private val storageKey = "voice_template_v1"
 
     companion object {
-        // Centralized default threshold for verification (tune this on-device)
+        // Centralized default threshold for verification (tune on real device)
         const val DEFAULT_THRESHOLD = 0.78
     }
 
@@ -55,7 +55,6 @@ class VoiceVerifier(private val context: Context) {
 
     private fun cosineSimilarity(a: DoubleArray, b: DoubleArray): Double {
         if (a.size != b.size) {
-            // if different lengths, pad shorter with zeros
             val n = maxOf(a.size, b.size)
             val aa = DoubleArray(n); val bb = DoubleArray(n)
             for (i in 0 until n) {
