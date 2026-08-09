@@ -1,7 +1,6 @@
 package com.shahrafuking.kingassistant.ui
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -94,11 +93,11 @@ class VerificationActivity : AppCompatActivity() {
                             infoTv.text = "Recording failed during verification."
                             return@launch
                         }
-                        val ok = verifier.verify(features, threshold = 0.78) // threshold tuned for prototype
+                        // Use centralized default threshold from VoiceVerifier
+                        val ok = verifier.verify(features, threshold = VoiceVerifier.DEFAULT_THRESHOLD)
                         if (ok) {
                             infoTv.text = "Verification successful — welcome Shah Rafu King."
                             Toast.makeText(this@VerificationActivity, "Verified", Toast.LENGTH_LONG).show()
-                            // proceed to main activity
                             setResult(RESULT_OK)
                             finish()
                         } else {
