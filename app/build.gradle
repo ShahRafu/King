@@ -2,6 +2,10 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+def porcupineAccessKey = project.hasProperty('PORCUPINE_ACCESS_KEY') ? project.property('PORCUPINE_ACCESS_KEY') : ""
+def porcupineKeywordFile = project.hasProperty('PORCUPINE_KEYWORD_FILENAME') ? project.property('PORCUPINE_KEYWORD_FILENAME') : "your_keyword.ppn"
+def porcupineEnabledProp = project.hasProperty('PORCUPINE_ENABLED') ? project.property('PORCUPINE_ENABLED').toBoolean() : false
+
 android {
     compileSdkVersion 35
 
@@ -11,6 +15,11 @@ android {
         targetSdkVersion 35
         versionCode 1
         versionName "0.1"
+
+        // Expose BuildConfig values; you can set these via gradle.properties or local.properties via -P
+        buildConfigField "boolean", "PORCUPINE_ENABLED", porcupineEnabledProp.toString()
+        buildConfigField "String", "PORCUPINE_ACCESS_KEY", "\"${porcupineAccessKey}\""
+        buildConfigField "String", "PORCUPINE_KEYWORD_FILENAME", "\"${porcupineKeywordFile}\""
     }
 
     buildTypes {
@@ -33,6 +42,6 @@ dependencies {
     implementation 'androidx.compose.material:material:1.4.0'
     implementation 'androidx.compose.ui:ui-tooling-preview:1.4.0'
 
-    // Placeholder for Porcupine/Vosk dependencies - add the real coordinates and license key in local.properties
+    // Porcupine SDK placeholder - uncomment & set correct version when ready:
     // implementation 'ai.picovoice:porcupine-android:VERSION'
 }
