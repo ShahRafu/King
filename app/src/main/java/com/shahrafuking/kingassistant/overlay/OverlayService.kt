@@ -12,9 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -23,23 +20,22 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import com.shahrafuking.kingassistant.speech.CommandRecognizer
+import com.shahrafuking.kingassistant.speech.HotwordManager
 import kotlinx.coroutines.*
 
 /**
- * OverlayService: Foreground Service that creates a system overlay robot view
- * and runs a SpeechRecognizer to toggle the overlay using voice commands.
+ * OverlayService (updated)
  *
- * Usage:
- * - Ensure RECORD_AUDIO runtime permission granted and SYSTEM_ALERT_WINDOW enabled in Settings.
- * - Start service via startForegroundService(intent) with EXTRA_SHOW_OVERLAY=true to show immediately.
+ * - Replaces previous continuous SpeechRecognizer loop with HotwordManager + CommandRecognizer.
+ * - HotwordManager tries Porcupine (if enabled) otherwise uses Android SpeechRecognizer fallback,
+ *   and both are configured to match Bangla (bn-BD) via the HotwordManager/CommandRecognizer implementations.
+ * - When hotword is detected, this service starts a one-shot Bengali command recognition session
+ *   (CommandRecognizer) and handles the returned Bangla text in handleVoiceCommand().
  *
- * Voice commands recognized (examples):
- * - "king assistant go to your form"  => show overlay
- * - "ek ho" (or variants)             => hide overlay
- *
- * IMPORTANT:
- * - This uses Android SpeechRecognizer which may be OEM/battery-sensitive for continuous listening.
- * - For robust always-on hotword, prefer Porcupine + offline small recognizer.
+ * Important:
+ * - Activity must grant RECORD_AUDIO at runtime before starting this service.
+ * - Activity must guide user to enable SYSTEM_ALERT_WINDOW (draw over other apps) before showing overlay.
  */
 class OverlayService : Service() {
     private val TAG = "OverlayService"
@@ -48,17 +44,30 @@ class OverlayService : Service() {
 
     private var windowManager: WindowManager? = null
     private var overlayRoot: FrameLayout? = null
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var listenJob: Job? = null
+
+    // Hotword + command pieces
+    private var hotwordManager: HotwordManager? = null
+    private var commandRecognizer: CommandRecognizer? = null
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var isOverlayShown = false
+    private var commandInProgress = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForeground(NOTIF_ID, createNotification())
-        startSpeechRecognitionLoop()
+
+        // Initialize HotwordManager and listen for hotword events
+        hotwordManager = HotwordManager(applicationContext)
+        hotwordManager?.setListener(object : HotwordManager.HotwordListener {
+            override fun onHotwordDetected() {
+                Log.i(TAG, "Hotword detected (service)")
+                onHotwordTriggered()
+            }
+        })
+        // HotwordManager will try Porcupine if enabled; otherwise falls back to bn-BD speech recognizer.
+        hotwordManager?.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -77,7 +86,10 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         hideOverlay()
-        stopSpeechRecognitionLoop()
+        try {
+            hotwordManager?.stop()
+        } catch (_: Throwable) {}
+        commandRecognizer?.cancel()
         mainScope.cancel()
     }
 
@@ -102,6 +114,9 @@ class OverlayService : Service() {
             .build()
     }
 
+    // --------------------------
+    // Overlay view handling
+    // --------------------------
     fun showOverlay() {
         if (isOverlayShown) return
         if (!Settings.canDrawOverlays(this)) {
@@ -110,18 +125,16 @@ class OverlayService : Service() {
         }
 
         overlayRoot = FrameLayout(this).apply {
-            // Transparent container
-            setBackgroundColor(0x00000000)
+            setBackgroundColor(0x00000000) // transparent container
         }
 
         val robotView = TextView(this).apply {
-            text = "\uD83E\uDD16" // robot emoji - replace with animated view if desired
+            text = "\uD83E\uDD16" // robot emoji placeholder; replace with animated view if desired
             textSize = 56f
             setPadding(24, 24, 24, 24)
             setBackgroundResource(android.R.drawable.alert_light_frame)
         }
 
-        // Make robot draggable
         robotView.setOnTouchListener(object : View.OnTouchListener {
             var lastX = 0f
             var lastY = 0f
@@ -210,81 +223,92 @@ class OverlayService : Service() {
         }
     }
 
-    // Speech recognition loop
-    private fun startSpeechRecognitionLoop() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Log.w(TAG, "Speech recognition not available")
+    // --------------------------
+    // Hotword -> Command flow
+    // --------------------------
+    private fun onHotwordTriggered() {
+        // prevent overlapping command sessions
+        if (commandInProgress.get()) {
+            Log.i(TAG, "command already in progress, ignoring hotword")
             return
         }
-        stopSpeechRecognitionLoop()
-        listenJob = mainScope.launch {
-            while (isActive) {
-                try {
-                    startSingleRecognition()
-                    delay(500) // brief pause between sessions
-                } catch (t: Throwable) {
-                    Log.w(TAG, "speech loop error", t)
-                    delay(1000)
-                }
-            }
-        }
-    }
 
-    private fun stopSpeechRecognitionLoop() {
-        listenJob?.cancel()
-        listenJob = null
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-    }
+        // Optionally show overlay when hotword detected
+        showOverlay()
 
-    private fun startSingleRecognition() {
-        // Caller (Activity) must ensure audio permission already granted
-        speechRecognizer?.destroy()
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer = recognizer
-        val intent = RecognizerIntent().apply {
-            action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-        }
-        recognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onError(error: Int) {
-                Log.w(TAG, "recognizer error: $error")
-                try { recognizer.cancel(); recognizer.destroy() } catch (_: Exception) {}
+        // Temporarily pause hotword manager to avoid double triggers while recognizing command
+        try { hotwordManager?.stop() } catch (_: Throwable) {}
+
+        commandInProgress.set(true)
+
+        commandRecognizer = CommandRecognizer(applicationContext)
+        commandRecognizer?.listenOnce(object : CommandRecognizer.CommandListener {
+            override fun onCommandResult(text: String) {
+                Log.i(TAG, "Command recognized (bn-BD): $text")
+                handleVoiceCommand(text)
+                cleanupCommandSession()
             }
-            override fun onResults(results: Bundle?) {
-                val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
-                handleRecognizedTexts(texts)
-                try { recognizer.destroy() } catch (_: Exception) {}
+
+            override fun onCommandError(reason: String) {
+                Log.w(TAG, "Command error: $reason")
+                cleanupCommandSession()
             }
-            override fun onPartialResults(partialResults: Bundle?) {
-                val texts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
-                handleRecognizedTexts(texts)
-            }
-            override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        recognizer.startListening(intent)
     }
 
-    private fun handleRecognizedTexts(texts: ArrayList<String>) {
-        for (t in texts) {
-            val low = t.lowercase()
-            // exact phrase matching is brittle; consider fuzzy or wakeword + command recognizer later
-            if (low.contains("king assistant go to your form") || low.contains("king assistant go to your form".lowercase())) {
-                showOverlay()
-                return
-            }
-            if (low.contains("ek ho") || low.contains("এক হও") || low.contains("ekho")) {
-                hideOverlay()
-                return
-            }
+    private fun cleanupCommandSession() {
+        try { commandRecognizer?.cancel() } catch (_: Throwable) {}
+        commandRecognizer = null
+        commandInProgress.set(false)
+        // restart hotword listening after brief delay
+        mainScope.launch {
+            delay(500)
+            try { hotwordManager?.start() } catch (_: Throwable) {}
         }
+    }
+
+    /**
+     * Parse Bangla (bn-BD) commands and execute actions.
+     * Keep parsing focused and conservative — expand as you add more commands.
+     */
+    private fun handleVoiceCommand(text: String) {
+        val low = text.lowercase().trim()
+        // Deactivation commands: "King Assistant এখন জিরিয়ে নাও" / "King Assistant ঘুমিয়ে যাও" / "এক হও"
+        if (low.contains("এক হও") || low.contains("ek ho") || low.contains("একহো") ||
+            low.contains("কিং অ্যাসিস্ট্যান্ট ঘুমিয়ে") || low.contains("কিং অ্যাসিস্ট্যান্ট এখন জিরিয়ে")) {
+            Log.i(TAG, "Voice command -> deactivate/stop service")
+            // Stop overlay and optionally stop service
+            hideOverlay()
+            stopSelf()
+            return
+        }
+
+        // Overlay hide command (Bangla variants)
+        if (low.contains("বন্ধ কর") || low.contains("থামো") || low.contains("বন্ধ")) {
+            Log.i(TAG, "Voice command -> hide overlay")
+            hideOverlay()
+            return
+        }
+
+        // Example panic stop (trades) placeholder
+        if (low.contains("সব ট্রেড বন্ধ কর") || low.contains("সব ট্রেড থামাও") || low.contains("panic stop")) {
+            Log.i(TAG, "Voice command -> PANIC STOP (placeholder)")
+            // TODO: Hook into trading module to stop active trades
+            // For now, broadcast or log
+            sendBroadcast(Intent(ACTION_PANIC_STOP))
+            return
+        }
+
+        // Example: request status
+        if (low.contains("তোমার অবস্থা") || low.contains("কি করছ") || low.contains("স্ট্যাটাস")) {
+            Log.i(TAG, "Voice command -> status request")
+            // You can broadcast or update notification
+            // For demo: just log
+            return
+        }
+
+        // If command not recognized, you can show/voice a prompt or ignore
+        Log.i(TAG, "Voice command not matched: $text")
     }
 
     companion object {
@@ -293,5 +317,8 @@ class OverlayService : Service() {
 
         const val ACTION_OVERLAY_SHOW = "king.overlay.SHOWED"
         const val ACTION_OVERLAY_HIDE = "king.overlay.HIDDEN"
+
+        // Example broadcast for panic stop hook
+        const val ACTION_PANIC_STOP = "king.overlay.PANIC_STOP"
     }
 }
