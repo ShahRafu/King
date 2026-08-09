@@ -2,93 +2,147 @@ package com.shahrafuking.kingassistant.audio
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.core.content.PermissionChecker
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Robust AudioRecord wrapper that streams PCM16LE frames via callback.
- * - Uses mono, 16-bit PCM, default sampleRate 16000 (compatible with many hotword engines)
- * - Caller must run heavy work on background thread (this class offloads read to its own thread)
+ * Simple AudioRecorder wrapper that creates an AudioRecord with AEC/NS if available.
+ * - Default sample rate 16k (can be changed)
+ * - Provides start(callback) and stop() APIs
  */
-class AudioRecorder(private val context: Context) {
+class AudioRecorder(private val ctx: Context) {
     companion object {
+        const val TAG = "AudioRecorder"
         const val DEFAULT_SAMPLE_RATE = 16000
     }
 
     private var audioRecord: AudioRecord? = null
+    private var recordingThread: Thread? = null
     private val running = AtomicBoolean(false)
-    private var readThread: Thread? = null
+    private var aec: AcousticEchoCanceler? = null
+    private var ns: NoiseSuppressor? = null
 
     fun hasRecordPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PermissionChecker.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
 
     /**
-     * Start streaming PCM frames. The callback receives a ShortArray (PCM16) and the sampleRate.
-     * Throws IllegalStateException if RECORD_AUDIO permission not granted.
+     * Start recording; delivers PCM chunks to callback as ShortArray and sampleRate.
+     * Uses AudioSource.VOICE_COMMUNICATION to improve echo cancellation support.
      */
-    fun start(onPcmFrame: (ShortArray, Int) -> Unit, sampleRate: Int = DEFAULT_SAMPLE_RATE) {
-        if (!hasRecordPermission()) throw IllegalStateException("RECORD_AUDIO permission is required")
+    fun start(onPcmChunk: (ShortArray, Int) -> Unit, sampleRate: Int = DEFAULT_SAMPLE_RATE) {
+        if (!hasRecordPermission()) {
+            Log.w(TAG, "No RECORD_AUDIO permission")
+            return
+        }
         if (running.get()) return
 
-        val minBuffer = AudioRecord.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        ).coerceAtLeast(sampleRate / 2) // safety lower bound
-
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(sampleRate * 2)
         try {
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
+            val ar = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                minBuffer
+                channelConfig,
+                audioFormat,
+                minBuf
             )
-            audioRecord?.startRecording()
-        } catch (t: Throwable) {
-            Log.e("AudioRecorder", "start error", t)
-            audioRecord = null
-            throw t
-        }
+            if (ar.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w(TAG, "AudioRecord failed to initialize (state=${ar.state})")
+                return
+            }
+            audioRecord = ar
 
-        running.set(true)
-        readThread = Thread {
-            val shortBuffer = ShortArray(minBuffer / 2)
-            while (running.get() && audioRecord != null) {
+            // Enable AcousticEchoCanceler and NoiseSuppressor if available
+            try {
+                val sessionId = ar.audioSessionId
+                if (AcousticEchoCanceler.isAvailable()) {
+                    try {
+                        aec = AcousticEchoCanceler.create(sessionId)
+                        aec?.enabled = true
+                        Log.i(TAG, "AEC enabled (session=$sessionId)")
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Failed to enable AEC", t)
+                    }
+                } else {
+                    Log.i(TAG, "AEC not available on device")
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && NoiseSuppressor.isAvailable()) {
+                    try {
+                        ns = NoiseSuppressor.create(sessionId)
+                        ns?.enabled = true
+                        Log.i(TAG, "NoiseSuppressor enabled (session=$sessionId)")
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Failed to enable NoiseSuppressor", t)
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Audio effects setup failed", t)
+            }
+
+            ar.startRecording()
+            running.set(true)
+            recordingThread = Thread {
+                val buffer = ShortArray(minBuf / 2)
                 try {
-                    val read = audioRecord!!.read(shortBuffer, 0, shortBuffer.size)
-                    if (read > 0) {
-                        onPcmFrame(shortBuffer.copyOf(read), sampleRate)
+                    while (running.get()) {
+                        val read = ar.read(buffer, 0, buffer.size)
+                        if (read > 0) {
+                            val chunk = if (read == buffer.size) buffer else buffer.copyOf(read)
+                            try {
+                                onPcmChunk(chunk, sampleRate)
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "onPcmChunk callback error", t)
+                            }
+                        } else {
+                            // read returned <=0, slight sleep to avoid tight loop
+                            Thread.sleep(10)
+                        }
                     }
                 } catch (t: Throwable) {
-                    Log.w("AudioRecorder", "read loop error", t)
+                    Log.w(TAG, "Recording loop error", t)
+                } finally {
+                    try {
+                        ar.stop()
+                    } catch (_: Throwable) {}
                 }
             }
-        }.also { it.name = "AudioRecord-Reader" }.apply { start() }
+            recordingThread?.start()
+        } catch (t: Throwable) {
+            Log.w(TAG, "AudioRecord start failed", t)
+        }
     }
 
-    /**
-     * Stop recording and release resources. This returns immediately but attempts to stop gracefully.
-     */
     fun stop() {
         running.set(false)
         try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (t: Throwable) {
-            Log.w("AudioRecorder", "stop error", t)
-        } finally {
-            audioRecord = null
-        }
+            recordingThread?.join(300)
+        } catch (_: Throwable) {}
+        recordingThread = null
         try {
-            readThread?.join(200)
-        } catch (_: InterruptedException) { /* ignore */ }
-        readThread = null
+            audioRecord?.stop()
+        } catch (_: Throwable) {}
+        try {
+            audioRecord?.release()
+        } catch (_: Throwable) {}
+        audioRecord = null
+        try {
+            aec?.release()
+        } catch (_: Throwable) {}
+        aec = null
+        try {
+            ns?.release()
+        } catch (_: Throwable) {}
+        ns = null
     }
 }
