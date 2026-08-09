@@ -1,26 +1,22 @@
-<manifest package="com.shahrafuking.kingassistant"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.shahrafuking.kingassistant">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required runtime permission for audio recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
         android:label="King Assistant"
-        android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
-        <activity android:name=".ui.MainActivity"
-            android:exported="true">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true">
+        <!-- Main activity placeholder - replace with your activity if different -->
+        <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <service
-            android:name=".background.ForegroundService"
-            android:foregroundServiceType="mediaProjection|location"
-            android:exported="false" />
     </application>
 </manifest>
