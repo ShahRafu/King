@@ -13,8 +13,7 @@ import kotlinx.coroutines.*
  *
  * Usage:
  *   val rec = CommandRecognizer(context)
- *   rec.listenOnce { text -> /* handle command text (bn-BD) */ }
- *   rec.cancel()  // if needed
+ *   rec.listenOnce(object : CommandRecognizer.CommandListener { ... })
  */
 class CommandRecognizer(private val context: Context) {
     private val TAG = "CommandRecognizer"
@@ -27,9 +26,7 @@ class CommandRecognizer(private val context: Context) {
     }
 
     fun listenOnce(listener: CommandListener) {
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Throwable) {}
+        try { speechRecognizer?.destroy() } catch (_: Throwable) {}
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             listener.onCommandError("SpeechRecognizer not available")
             return
@@ -66,7 +63,7 @@ class CommandRecognizer(private val context: Context) {
         })
         try {
             speechRecognizer?.startListening(intent)
-            // Safety timeout in case recognizer never returns
+            // Safety timeout
             mainScope.launch {
                 delay(8000)
                 listener.onCommandError("timeout")
@@ -78,11 +75,8 @@ class CommandRecognizer(private val context: Context) {
     }
 
     fun cancel() {
-        try {
-            speechRecognizer?.cancel()
-            speechRecognizer?.destroy()
-        } catch (_: Throwable) {}
+        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Throwable) {}
         speechRecognizer = null
-        mainScope.cancel()
+        try { mainScope.cancel() } catch (_: Throwable) {}
     }
 }
