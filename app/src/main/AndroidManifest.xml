@@ -2,9 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.shahrafuking.kingassistant">
 
-    <!-- Required runtime permission for audio recording -->
+    <!-- runtime permission for audio (SpeechRecognizer) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -12,7 +11,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true">
-        <!-- Main activity placeholder - replace with your activity if different -->
+
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -20,10 +19,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Hotword foreground service -->
+        <!-- OverlayService declaration -->
         <service
-            android:name="com.shahrafuking.kingassistant.hotword.WakewordService"
+            android:name=".overlay.OverlayService"
             android:exported="false" />
-
     </application>
 </manifest>
