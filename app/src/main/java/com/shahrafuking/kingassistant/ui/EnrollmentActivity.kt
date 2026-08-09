@@ -1,7 +1,6 @@
 package com.shahrafuking.kingassistant.ui
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Button
@@ -29,6 +28,9 @@ class EnrollmentActivity : AppCompatActivity() {
 
     private val samplesRequired = 3
     private val samples = mutableListOf<DoubleArray>()
+
+    // Max retry attempts per sample
+    private val maxRetriesPerSample = 3
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -64,24 +66,38 @@ class EnrollmentActivity : AppCompatActivity() {
         statusTv.text = "Enrollment: speak the passphrase when prompted.\nSamples needed: $samplesRequired"
 
         CoroutineScope(Dispatchers.Main).launch {
-            for (i in 1..samplesRequired) {
-                statusTv.text = "Recording sample $i of $samplesRequired — Speak: \"King Assistant\" (or Bengali equivalent)"
+            var sampleIndex = 1
+            while (sampleIndex <= samplesRequired) {
+                statusTv.text = "Recording sample $sampleIndex of $samplesRequired — Speak: \"King Assistant\" (or Bengali equivalent)"
                 // small delay to let user get ready
                 withContext(Dispatchers.IO) { Thread.sleep(600) }
-                val features = enrollmentManager.recordAndExtract(2400)
+
+                var attempt = 0
+                var features: DoubleArray? = null
+                while (attempt < maxRetriesPerSample && features == null) {
+                    attempt++
+                    statusTv.text = "Recording sample $sampleIndex (attempt $attempt of $maxRetriesPerSample)..."
+                    features = enrollmentManager.recordAndExtract(2400)
+                    if (features == null) {
+                        // failed attempt
+                        statusTv.text = "Recording attempt $attempt failed. ${if (attempt < maxRetriesPerSample) "Retrying..." else "Please retry the sample."}"
+                        withContext(Dispatchers.IO) { Thread.sleep(500) }
+                    }
+                }
+
                 if (features == null) {
-                    Toast.makeText(this@EnrollmentActivity, "Recording failed. Try again.", Toast.LENGTH_SHORT).show()
-                    i - 1
-                    // retry same index
-                    // simple approach: break
-                    statusTv.text = "Recording failed. Please retry enrollment."
+                    // exhausted retries for this sample — give user option to restart entire enrollment
+                    statusTv.text = "Failed to capture sample $sampleIndex after $maxRetriesPerSample attempts. Enrollment aborted."
+                    Toast.makeText(this@EnrollmentActivity, "Recording failed. Please retry enrollment from the start.", Toast.LENGTH_LONG).show()
                     return@launch
                 }
+
                 samples.add(features)
                 progress.progress = samples.size
-                statusTv.text = "Captured sample $i"
+                statusTv.text = "Captured sample $sampleIndex"
                 // short pause
                 withContext(Dispatchers.IO) { Thread.sleep(400) }
+                sampleIndex++
             }
 
             // average vectors
@@ -94,7 +110,6 @@ class EnrollmentActivity : AppCompatActivity() {
                 if (success) {
                     statusTv.text = "Enrollment complete — voice template saved securely."
                     Toast.makeText(this@EnrollmentActivity, "Enrollment successful", Toast.LENGTH_LONG).show()
-                    // goto verification or main
                     setResult(RESULT_OK)
                     finish()
                 } else {
