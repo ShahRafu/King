@@ -1,9 +1,7 @@
 package com.shahrafuking.kingassistant
 
-import android.content.BroadcastReceiver
-import android.content.Context
+import android.Manifest
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,36 +11,39 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.shahrafuking.kingassistant.overlay.OverlayPermissionHelper
 import com.shahrafuking.kingassistant.overlay.OverlayService
+import com.shahrafuking.kingassistant.voice.VoiceVerifier
 
-/**
- * Simple Activity to request permissions and control the overlay service.
- * Replace your existing MainActivity with this file (or merge logic into your Activity).
- */
 class MainActivity : AppCompatActivity() {
     private val REQ_OVERLAY = 4242
     private val REQ_AUDIO = 4243
 
     private lateinit var statusText: TextView
+    private val verifier by lazy { VoiceVerifier(this) }
 
-    private val overlayBroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                OverlayService.ACTION_OVERLAY_SHOW -> {
-                    statusText.text = "Overlay: SHOWN"
-                    // hide main UI content if desired
-                    findViewById<View>(android.R.id.content)?.visibility = View.GONE
-                    Toast.makeText(this@MainActivity, "Overlay shown", Toast.LENGTH_SHORT).show()
-                }
-                OverlayService.ACTION_OVERLAY_HIDE -> {
-                    statusText.text = "Overlay: HIDDEN"
-                    findViewById<View>(android.R.id.content)?.visibility = View.VISIBLE
-                    Toast.makeText(this@MainActivity, "Overlay hidden", Toast.LENGTH_SHORT).show()
-                }
-            }
+    // ActivityResult launchers for Enrollment & Verification activities
+    private val enrollLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Toast.makeText(this, "Enrollment completed. Please verify.", Toast.LENGTH_SHORT).show()
+            // After enrollment, start verification
+            startVerificationActivity()
+        } else {
+            Toast.makeText(this, "Enrollment not completed.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val verifyLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Toast.makeText(this, "Verification successful.", Toast.LENGTH_SHORT).show()
+            // Now ensure permissions and start overlay service
+            ensurePermissionsAndStartOverlayService()
+        } else {
+            Toast.makeText(this, "Verification failed or cancelled.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -54,35 +55,61 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
         }
-        statusText = TextView(this).apply { text = "Overlay: UNKNOWN" }
-        val btnStart = Button(this).apply { text = "Start Overlay (voice control)"; setOnClickListener { ensurePermissionsAndStartOverlayService() } }
-        val btnStop = Button(this).apply { text = "Stop Overlay Service"; setOnClickListener { stopOverlayService() } }
+        statusText = TextView(this).apply { text = "King Assistant — status: idle" }
+        val btnStart = Button(this).apply {
+            text = "Start (ensure verification)"
+            setOnClickListener { onStartClicked() }
+        }
+        val btnStop = Button(this).apply {
+            text = "Stop Overlay Service"
+            setOnClickListener { stopOverlayService() }
+        }
 
         layout.addView(statusText)
         layout.addView(btnStart)
         layout.addView(btnStop)
-
         setContentView(layout)
-    }
 
-    override fun onResume() {
-        super.onResume()
-        val filter = IntentFilter().apply {
-            addAction(OverlayService.ACTION_OVERLAY_SHOW)
-            addAction(OverlayService.ACTION_OVERLAY_HIDE)
+        // On app start, check whether user is enrolled; route accordingly
+        // Ensure RECORD_AUDIO permission first (both enrollment & verification need mic)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
+        } else {
+            routeForEnrollmentOrVerification()
         }
-        registerReceiver(overlayBroadcastReceiver, filter)
     }
 
-    override fun onPause() {
-        super.onPause()
-        try { unregisterReceiver(overlayBroadcastReceiver) } catch (_: IllegalArgumentException) { }
+    private fun onStartClicked() {
+        // Allow user to manually trigger verification if desired
+        routeForEnrollmentOrVerification()
     }
 
-    private fun ensurePermissionsAndStartOverlayService() {
+    private fun routeForEnrollmentOrVerification() {
+        val template = verifier.loadTemplate()
+        if (template == null) {
+            // not enrolled -> launch EnrollmentActivity
+            startEnrollmentActivity()
+        } else {
+            // already enrolled -> launch VerificationActivity
+            startVerificationActivity()
+        }
+    }
+
+    private fun startEnrollmentActivity() {
+        val intent = Intent(this, com.shahrafuking.kingassistant.ui.EnrollmentActivity::class.java)
+        enrollLauncher.launch(intent)
+    }
+
+    private fun startVerificationActivity() {
+        val intent = Intent(this, com.shahrafuking.kingassistant.ui.VerificationActivity::class.java)
+        verifyLauncher.launch(intent)
+    }
+
+    // Called after enrollment/verification success to ensure overlay and mic permissions and start overlay
+    fun ensurePermissionsAndStartOverlayService() {
         // 1) RECORD_AUDIO permission
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
             return
         }
 
@@ -92,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 3) Start service
+        // 3) Start overlay service
         val intent = Intent(this, OverlayService::class.java).apply {
             putExtra(OverlayService.EXTRA_SHOW_OVERLAY, true)
         }
@@ -101,36 +128,35 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(intent)
         }
-        statusText.text = "Overlay: STARTED (waiting for voice)"
+        statusText.text = "King Assistant — Overlay started (awaiting voice)"
     }
 
     private fun stopOverlayService() {
         val stopIntent = Intent(this, OverlayService::class.java).apply {
             action = OverlayService.ACTION_STOP_SERVICE
         }
-        startService(stopIntent) // service will handle stop action
-        statusText.text = "Overlay: STOPPED (requested)"
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_OVERLAY) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                // permission granted -> try again
-                ensurePermissionsAndStartOverlayService()
-            } else {
-                Toast.makeText(this, "Overlay permission required", Toast.LENGTH_LONG).show()
-            }
-        }
+        startService(stopIntent)
+        statusText.text = "King Assistant — Overlay stop requested"
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_AUDIO) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                routeForEnrollmentOrVerification()
+            } else {
+                Toast.makeText(this, "Microphone permission required for enrollment/verification", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_OVERLAY) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
                 ensurePermissionsAndStartOverlayService()
             } else {
-                Toast.makeText(this, "Audio permission required for voice commands", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Overlay permission required", Toast.LENGTH_LONG).show()
             }
         }
     }
