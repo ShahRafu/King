@@ -1,17 +1,14 @@
 package com.shahrafuking.kingassistant.ui.screens
 
 import android.content.SharedPreferences
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.Text
+import androidx.compose.material.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.shahrafuking.kingassistant.system.BatteryHelper
+import com.shahrafuking.kingassistant.core.BudgetManager
 
 @Composable
 fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
@@ -44,6 +42,12 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
 
         Divider(modifier = Modifier.padding(vertical = 8.dp))
 
+        // Budget row added for Part-3
+        BudgetRow(prefs)
+
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Spacer(modifier = Modifier.padding(6.dp))
         Row {
             Button(onClick = {
                 BatteryHelper.requestIgnoreBatteryOptimization(ctx as android.app.Activity)
@@ -53,6 +57,45 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
             Spacer(modifier = Modifier.padding(8.dp))
             Button(onClick = { onClose() }) {
                 Text("Close")
+            }
+        }
+    }
+}
+
+@Composable
+fun BudgetRow(prefs: SharedPreferences) {
+    val ctx = LocalContext.current
+    val existing = BudgetManager.getBudget(ctx)?.toString() ?: ""
+    var value by remember { mutableStateOf(existing) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Voice Budget (USD)")
+        Spacer(modifier = Modifier.padding(4.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            TextField(
+                value = value,
+                onValueChange = { value = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Enter amount e.g. 20") }
+            )
+            Spacer(modifier = Modifier.padding(6.dp))
+            Button(onClick = {
+                val v = value.replace(",", "").trim().toDoubleOrNull()
+                if (v != null) {
+                    BudgetManager.setBudget(ctx, v)
+                    prefs.edit().putString("voice_budget_ui", v.toString()).apply()
+                    value = v.toString()
+                }
+            }) {
+                Text("Set")
+            }
+            Spacer(modifier = Modifier.padding(4.dp))
+            Button(onClick = {
+                BudgetManager.clearBudget(ctx)
+                prefs.edit().remove("voice_budget_ui").apply()
+                value = ""
+            }) {
+                Text("Clear")
             }
         }
     }
