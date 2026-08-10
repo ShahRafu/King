@@ -1,0 +1,6 @@
+name: Add voice-verified panic release flow
+message: |
+  Add detection for the release phrase (এখন নরমাল হয়ে যাও কিং এসিস্টেন্ট) in CommandHandler and perform
+  a voice verification using ProductionEmbedderAdapter before releasing PanicManager.
+
+  If verification succeeds, PanicManager.release(context) is called; otherwise panic remains engaged.
