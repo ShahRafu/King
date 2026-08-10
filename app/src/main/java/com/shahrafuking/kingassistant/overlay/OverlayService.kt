@@ -1,4 +1,3 @@
-// OverlayService.kt
 package com.shahrafuking.kingassistant.overlay
 
 import android.app.Notification
@@ -56,6 +55,9 @@ class OverlayService : Service() {
     private var conversationRecognizer: SpeechRecognizer? = null
     private var languageTranslator: LanguageTranslator? = null
 
+    // SpeakerVerifier instance to load on-device models (speaker + antispoof)
+    private var speakerVerifier: com.shahrafuking.kingassistant.voice.tflite.SpeakerVerifier? = null
+
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val commandInProgress = AtomicBoolean(false)
     private var isOverlayShown = AtomicBoolean(false)
@@ -75,6 +77,18 @@ class OverlayService : Service() {
         startForeground(NOTIF_ID, createNotification())
 
         languageTranslator = LanguageTranslator(applicationContext)
+
+        // Initialize on-device speaker & antispoof models (assets root)
+        try {
+            speakerVerifier = com.shahrafuking.kingassistant.voice.tflite.SpeakerVerifier(
+                applicationContext,
+                modelAssetPath = "speaker_model.tflite",
+                antiSpoofAssetPath = "antispoof_model.tflite"
+            )
+            Log.i(TAG, "SpeakerVerifier initialized with assets: speaker_model.tflite / antispoof_model.tflite")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to init SpeakerVerifier", t)
+        }
 
         hotwordManager = HotwordManager(applicationContext)
         hotwordManager?.setListener(object : HotwordManager.HotwordListener {
@@ -116,6 +130,7 @@ class OverlayService : Service() {
         try { commandRecognizer?.cancel() } catch (_: Throwable) {}
         try { conversationRecognizer?.destroy() } catch (_: Throwable) {}
         try { languageTranslator?.shutdown() } catch (_: Throwable) {}
+        try { speakerVerifier?.close() } catch (_: Throwable) {}
         mainScope.cancel()
     }
 
