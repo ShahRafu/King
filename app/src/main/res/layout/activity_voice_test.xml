@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/vt_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Voice Test"
+        android:textSize="18sp"
+        android:padding="8dp" />
+
+    <ProgressBar
+        android:id="@+id/vt_progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        style="?android:attr/progressBarStyleHorizontal" />
+
+    <Button
+        android:id="@+id/vt_enroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enroll Voice (3 samples)"
+        android:layout_marginTop="16dp" />
+
+    <Button
+        android:id="@+id/vt_verify"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Verify Voice (test)"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>

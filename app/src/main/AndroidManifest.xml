@@ -14,7 +14,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true">
 
-        <!-- MainActivity (entrypoint) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -27,6 +26,7 @@
         <!-- Enrollment & Verification UIs -->
         <activity android:name=".ui.EnrollmentActivity" android:exported="false" />
         <activity android:name=".ui.VerificationActivity" android:exported="false" />
+        <activity android:name=".ui.VoiceTestActivity" android:exported="false" />
 
         <!-- OverlayService: foreground service with microphone usage -->
         <service
