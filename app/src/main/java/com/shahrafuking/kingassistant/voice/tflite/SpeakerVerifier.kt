@@ -8,46 +8,42 @@ import org.tensorflow.lite.Interpreter
 /**
  * SpeakerVerifier
  *
- * Responsibilities:
- * - Load a TFLite speaker‑verification model (optional).
- * - Provide computeEmbedding(input) → FloatArray and similarity() utilities.
+ * - Loads a TFLite speaker‑verification model (optional).
+ * - Optionally loads an anti‑spoof TFLite model.
+ * - Provides computeEmbedding, runAntiSpoofModel, cosineSimilarity utilities.
  *
- * Notes:
- * - This wrapper is tolerant: if no model is available it will fall back to a
- *   simple embedding derived from input features (normalized copy). This allows
- *   integration & tests without shipping an actual .tflite model.
- *
- * Model contract (typical):
- * - Input: [1, N] float32 (raw features or wave features depending on model)
- * - Output: [1, D] float32 embedding vector (normalized)
+ * Model expectations:
+ * - Speaker model: input [1, N] float32, output [1, D] float32 embedding
+ * - Anti‑spoof model (optional): input matching preprocessor output, output [1] score (0..1)
  */
-class SpeakerVerifier(private val context: Context, modelAssetPath: String? = null, modelFilePath: String? = null) {
-    companion object {
-        private const val TAG = "SpeakerVerifier"
-    }
+class SpeakerVerifier(
+    private val context: Context,
+    modelAssetPath: String? = null,
+    modelFilePath: String? = null,
+    antiSpoofAssetPath: String? = null
+) {
+    companion object { private const val TAG = "SpeakerVerifier" }
 
     private var interpreter: Interpreter? = null
+    private var antiSpoofInterpreter: Interpreter? = null
     private var embeddingDim: Int = 0
 
     init {
         try {
-            if (modelFilePath != null) {
-                interpreter = SampleModelLoader.loadFromFilePath(modelFilePath)
-            } else if (modelAssetPath != null) {
-                interpreter = SampleModelLoader.loadFromAssets(context, modelAssetPath)
+            if (modelFilePath != null) interpreter = SampleModelLoader.loadFromFilePath(modelFilePath)
+            else if (modelAssetPath != null) interpreter = SampleModelLoader.loadFromAssets(context, modelAssetPath)
+
+            if (antiSpoofAssetPath != null) {
+                antiSpoofInterpreter = SampleModelLoader.loadFromAssets(context, antiSpoofAssetPath)
             }
+
             if (interpreter != null) {
-                // attempt to deduce output shape by running a dummy input if possible
-                // we won't crash if this fails; fallback embeddingDim stays 0
                 try {
-                    val inputShape = interpreter!!.getInputTensor(0).shape()
                     val outShape = interpreter!!.getOutputTensor(0).shape()
                     if (outShape.size >= 2) embeddingDim = outShape[1]
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Could not probe tflite tensor shape", t)
-                }
+                } catch (t: Throwable) { Log.w(TAG, "Could not probe tflite tensor shape", t) }
             } else {
-                Log.i(TAG, "No TFLite model loaded: using fallback embedding path")
+                Log.i(TAG, "No TFLite speaker model loaded; using fallback embedding")
             }
         } catch (t: Throwable) {
             Log.w(TAG, "SpeakerVerifier init error", t)
@@ -55,24 +51,16 @@ class SpeakerVerifier(private val context: Context, modelAssetPath: String? = nu
     }
 
     /**
-     * Compute embedding from a supplied feature vector.
-     * - If model present: runs model.
-     * - Else: returns a normalized copy of input (fallback).
-     *
-     * Input: FloatArray of shape [N] (model-dependent). Returns FloatArray embedding (or null on error).
+     * Compute embedding from features. If model available, run it; otherwise use normalized fallback.
      */
     fun computeEmbedding(features: FloatArray): FloatArray? {
         return try {
             interpreter?.let { interp ->
-                // Prepare input and output buffers in shapes matching the model
                 val input = arrayOf(features)
                 val out = Array(1) { FloatArray(if (embeddingDim > 0) embeddingDim else 256) }
                 interp.run(input, out)
-                val emb = out[0]
-                l2Normalize(emb)
+                l2Normalize(out[0])
             } ?: run {
-                // fallback: simple normalized copy (expand/truncate to 256)
-                val target = IntArray(1)
                 val outDim = 256
                 val emb = FloatArray(outDim)
                 val n = minOf(features.size, outDim)
@@ -86,16 +74,27 @@ class SpeakerVerifier(private val context: Context, modelAssetPath: String? = nu
         }
     }
 
-    fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
-        var dot = 0f
-        var na = 0f
-        var nb = 0f
-        val n = minOf(a.size, b.size)
-        for (i in 0 until n) {
-            dot += a[i] * b[i]
-            na += a[i] * a[i]
-            nb += b[i] * b[i]
+    /**
+     * Run optional anti‑spoof model. Returns score in 0..1 or null if not available.
+     */
+    fun runAntiSpoofModel(features: FloatArray): Float? {
+        return try {
+            antiSpoofInterpreter?.let { interp ->
+                val input = arrayOf(features)
+                val out = Array(1) { FloatArray(1) }
+                interp.run(input, out)
+                out[0][0].coerceIn(0f, 1f)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "runAntiSpoofModel failed", t)
+            null
         }
+    }
+
+    fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        var dot = 0f; var na = 0f; var nb = 0f
+        val n = minOf(a.size, b.size)
+        for (i in 0 until n) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
         if (na == 0f || nb == 0f) return 0f
         return dot / (sqrt(na) * sqrt(nb))
     }
@@ -110,11 +109,9 @@ class SpeakerVerifier(private val context: Context, modelAssetPath: String? = nu
         return out
     }
 
-    /**
-     * release interpreter resources if any
-     */
     fun close() {
         try { interpreter?.close() } catch (_: Throwable) {}
-        interpreter = null
+        try { antiSpoofInterpreter?.close() } catch (_: Throwable) {}
+        interpreter = null; antiSpoofInterpreter = null
     }
 }
