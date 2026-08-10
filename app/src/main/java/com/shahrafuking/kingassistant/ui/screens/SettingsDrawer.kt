@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.shahrafuking.kingassistant.system.BatteryHelper
 import com.shahrafuking.kingassistant.core.BudgetManager
+import com.shahrafuking.kingassistant.core.PanicManager
 
 @Composable
 fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
@@ -44,6 +45,11 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
 
         // Budget row added for Part-3
         BudgetRow(prefs)
+
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // Panic controls
+        PanicRow()
 
         Divider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -96,6 +102,36 @@ fun BudgetRow(prefs: SharedPreferences) {
                 value = ""
             }) {
                 Text("Clear")
+            }
+        }
+    }
+}
+
+@Composable
+fun PanicRow() {
+    val ctx = LocalContext.current
+    var engaged by remember { mutableStateOf(PanicManager.isEngaged(ctx)) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Panic Mode")
+        Spacer(modifier = Modifier.padding(4.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(if (engaged) "Panic ENGAGED — trading disabled" else "Panic not engaged")
+            Spacer(modifier = Modifier.weight(1f))
+            if (!engaged) {
+                Button(onClick = {
+                    PanicManager.engage(ctx)
+                    engaged = true
+                }) {
+                    Text("Engage")
+                }
+            } else {
+                Button(onClick = {
+                    PanicManager.release(ctx)
+                    engaged = false
+                }) {
+                    Text("Release")
+                }
             }
         }
     }
