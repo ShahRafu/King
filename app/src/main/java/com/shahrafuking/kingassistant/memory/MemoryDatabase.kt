@@ -2,9 +2,13 @@ package com.shahrafuking.kingassistant.memory
 
 import android.content.Context
 import androidx.room.*
-import android.util.Base64
+import com.shahrafuking.kingassistant.security.KeystoreHelper
+import net.sqlcipher.database.SupportFactory
+import net.sqlcipher.database.SQLiteDatabase
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
+import android.util.Base64
 
 @Entity(tableName = "memory_entries")
 data class MemoryEntry(
@@ -43,13 +47,39 @@ abstract class MemoryDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): MemoryDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    MemoryDatabase::class.java,
-                    "king_memory.db"
-                ).build()
+                val instance = buildDatabase(context.applicationContext)
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        private fun buildDatabase(appContext: Context): MemoryDatabase {
+            try {
+                // Ensure SQLCipher native libs are loaded
+                SQLiteDatabase.loadLibs(appContext)
+
+                // Retrieve or create a DB passphrase stored securely via KeystoreHelper
+                val keyName = "db_passphrase_v1"
+                var passphrase = KeystoreHelper.decryptString(appContext, keyName)
+                if (passphrase == null) {
+                    // generate a random 32-byte base64 string
+                    val rnd = java.security.SecureRandom()
+                    val bytes = ByteArray(32)
+                    rnd.nextBytes(bytes)
+                    passphrase = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    KeystoreHelper.encryptString(appContext, passphrase, keyName)
+                }
+
+                val pass = passphrase.toByteArray(StandardCharsets.UTF_8)
+                val factory = SupportFactory(pass)
+
+                return Room.databaseBuilder(appContext, MemoryDatabase::class.java, "king_memory.db")
+                    .openHelperFactory(factory)
+                    .build()
+            } catch (t: Throwable) {
+                // If any error occurs (e.g., SQLCipher not available), fall back to plain Room
+                android.util.Log.w("MemoryDatabase", "encrypted db init failed, falling back to plain Room", t)
+                return Room.databaseBuilder(appContext, MemoryDatabase::class.java, "king_memory.db").build()
             }
         }
 
