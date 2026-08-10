@@ -1,0 +1,10 @@
+name: Add command/simulated-trade POC
+message: |
+  Add a conservative CommandHandler, trade executor interface and a simulated Quotex adapter.
+  Wire owner reply handling in OverlayService to parse panic and trade commands and run simulated dry-run execution.
+
+  Defaults:
+  - Dry-run only (no network or real broker calls)
+  - Audit entries written to MemoryRepository
+
+  This is committed to feature/king-core branch as the first safety-and-core wiring PR.
