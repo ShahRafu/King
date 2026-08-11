@@ -24,38 +24,30 @@ jobs:
           java-version: '17'
 
       - name: Install Android SDK (platform tools + build-tools)
-        # Replaced deprecated r0adkll/setup-android with maintained android-actions/setup-android@v4
         uses: android-actions/setup-android@v4
         with:
           api-level: 34
           build-tools: 34.0.0
 
-      - name: Ensure Gradle 8.6 available (download & setup)
-        run: |
-          set -eux
-          GRADLE_VERSION=8.6
-          GRADLE_ZIP=gradle-${GRADLE_VERSION}-bin.zip
-          INSTALL_DIR="$HOME/.gradle-dist/gradle-${GRADLE_VERSION}"
-          mkdir -p "$INSTALL_DIR"
-          curl -sSLo /tmp/${GRADLE_ZIP} https://services.gradle.org/distributions/${GRADLE_ZIP}
-          unzip -q /tmp/${GRADLE_ZIP} -d "$HOME/.gradle-dist"
-          export PATH="$INSTALL_DIR/bin:$PATH"
-          echo "Gradle version: $(gradle -v)"
-
-      - name: Grant execute permission for gradlew if present
+      - name: Ensure gradlew is executable
         run: |
           if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
 
-      - name: Build Debug APK
+      - name: Build Release APK
         run: |
           set -eux
-          # Use project wrapper only if the wrapper script exists and the wrapper JAR looks valid (non-corrupted).
+          # Prefer project Gradle wrapper when present and valid
           if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ] && [ "$(stat -c%s ./gradle/wrapper/gradle-wrapper.jar)" -gt 1024 ]; then
             echo "Using project Gradle wrapper"
-            ./gradlew assembleDebug --stacktrace
+            ./gradlew clean assembleRelease --no-daemon --stacktrace --warning-mode=all
           else
-            echo "Wrapper missing/invalid — using downloaded Gradle (8.6)"
-            gradle assembleDebug --no-daemon --stacktrace
+            echo "Wrapper missing/invalid — falling back to system Gradle if available"
+            if command -v gradle >/dev/null 2>&1; then
+              gradle clean assembleRelease --no-daemon --stacktrace --warning-mode=all
+            else
+              echo "No Gradle wrapper and no system gradle available. Please commit gradlew and gradle/wrapper/gradle-wrapper.jar"
+              exit 1
+            fi
           fi
 
       - name: Create GitHub Release
@@ -65,16 +57,16 @@ jobs:
           tag_name: apk-${{ github.sha }}
           name: APK build for ${{ github.sha }}
           body: >-
-            Automated debug APK build for commit ${{ github.sha }}.
+            Automated release APK build for commit ${{ github.sha }}.
             Branch: ${{ github.ref }}
             Built by GitHub Actions.
 
-      - name: Upload APK to Release
+      - name: Upload Release APK
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/debug/app-debug.apk
-          asset_name: KingAssistant-app-debug-${{ github.sha }}.apk
+          asset_path: app/build/outputs/apk/release/app-release-unsigned.apk
+          asset_name: KingAssistant-app-release-${{ github.sha }}-unsigned.apk
           asset_content_type: application/vnd.android.package-archive
 
       - name: Output release info
