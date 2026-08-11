@@ -30,16 +30,17 @@ jobs:
           api-level: 34
           build-tools: 34.0.0
 
-      - name: Ensure Gradle available (install via SDKMAN)
+      - name: Ensure Gradle 8.6 available (download & setup)
         run: |
           set -eux
-          if command -v gradle >/dev/null 2>&1; then
-            echo "gradle already available"
-          else
-            curl -s "https://get.sdkman.io" | bash
-            source "$HOME/.sdkman/bin/sdkman-init.sh"
-            sdk install gradle 8.4.1
-          fi
+          GRADLE_VERSION=8.6
+          GRADLE_ZIP=gradle-${GRADLE_VERSION}-bin.zip
+          INSTALL_DIR="$HOME/.gradle-dist/gradle-${GRADLE_VERSION}"
+          mkdir -p "$INSTALL_DIR"
+          curl -sSLo /tmp/${GRADLE_ZIP} https://services.gradle.org/distributions/${GRADLE_ZIP}
+          unzip -q /tmp/${GRADLE_ZIP} -d "$HOME/.gradle-dist"
+          export PATH="$INSTALL_DIR/bin:$PATH"
+          echo "Gradle version: $(gradle -v)"
 
       - name: Grant execute permission for gradlew if present
         run: |
@@ -53,7 +54,7 @@ jobs:
             echo "Using project Gradle wrapper"
             ./gradlew assembleDebug --stacktrace
           else
-            echo "Wrapper missing/invalid — using system Gradle (SDKMAN or preinstalled)"
+            echo "Wrapper missing/invalid — using downloaded Gradle (8.6)"
             gradle assembleDebug --no-daemon --stacktrace
           fi
 
