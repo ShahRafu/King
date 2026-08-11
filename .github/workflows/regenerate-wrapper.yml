@@ -1,5 +1,9 @@
 name: Regenerate Gradle Wrapper (temporary)
 
+# Allow this workflow to write contents (required for pushing commits)
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
