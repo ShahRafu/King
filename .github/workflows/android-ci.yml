@@ -49,11 +49,13 @@ jobs:
       - name: Run unit tests
         run: |
           set -eux
-          # Only use the wrapper if both the script and wrapper JAR are present.
-          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ]; then
+          # Only use the wrapper if the script, wrapper JAR are present and the JAR looks valid.
+          # Some commits have a corrupted gradle-wrapper.jar (size=1) which causes
+          # "Could not find or load main class org.gradle.wrapper.GradleWrapperMain".
+          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ] && [ "$(stat -c%s ./gradle/wrapper/gradle-wrapper.jar)" -gt 1024 ]; then
             echo "Using project Gradle wrapper"
             ./gradlew test --no-daemon --stacktrace
           else
-            echo "Using system Gradle (installed via SDKMAN or preinstalled)"
+            echo "Wrapper missing or invalid — using system Gradle (SDKMAN or preinstalled)"
             gradle test --no-daemon --stacktrace
           fi
