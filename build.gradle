@@ -4,7 +4,6 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.51.0' apply false
 }
 
-// Keep repositories centralized for all projects
 allprojects {
   repositories {
     google()
@@ -12,5 +11,6 @@ allprojects {
   }
 }
 
-// Apply dependency updates plugin at root so the dependencyUpdates task is available
 apply plugin: 'com.github.ben-manes.versions'
+
+// Configuration for the dependency updates plugin can go here if we need to ignore certain versions
