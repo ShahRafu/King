@@ -95,6 +95,21 @@ jobs:
             gradle tasks --all --no-daemon --stacktrace --debug || true
           fi
 
+      - name: Capture Gradle debug output to file
+        run: |
+          set -eux
+          mkdir -p build
+          echo "=== Capturing ./gradlew tasks (debug) to build/gradle-debug.log ==="
+          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ]; then
+            ./gradlew tasks --all --no-daemon --stacktrace --debug 2>&1 | tee build/gradle-debug.log || true
+            echo "\n=== Capturing :app:dependencies (debug) to build/gradle-debug.log ===" | tee -a build/gradle-debug.log
+            ./gradlew :app:dependencies --configuration debugCompileClasspath 2>&1 | tee -a build/gradle-debug.log || true
+          else
+            gradle tasks --all --no-daemon --stacktrace --debug 2>&1 | tee build/gradle-debug.log || true
+            echo "\n=== Capturing :app:dependencies (debug) to build/gradle-debug.log ===" | tee -a build/gradle-debug.log
+            gradle :app:dependencies --configuration debugCompileClasspath 2>&1 | tee -a build/gradle-debug.log || true
+          fi
+
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -121,6 +136,7 @@ jobs:
         with:
           name: gradle-debug-artifacts
           path: |
+            build/gradle-debug.log
             build/reports/**
             build/reports/problems/**
             gradle/wrapper/gradle-wrapper.properties
