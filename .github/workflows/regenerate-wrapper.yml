@@ -1,0 +1,77 @@
+name: Regenerate Gradle Wrapper (temporary)
+
+# Allow this workflow to write contents (required for pushing commits)
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  regenerate:
+    name: Regenerate and commit Gradle wrapper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install unzip
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Download Gradle 8.6
+        run: |
+          set -eux
+          GRADLE_VERSION=8.6
+          GRADLE_ZIP=gradle-${GRADLE_VERSION}-bin.zip
+          curl -sSLo /tmp/${GRADLE_ZIP} https://services.gradle.org/distributions/${GRADLE_ZIP}
+          unzip -q /tmp/${GRADLE_ZIP} -d /tmp
+          echo "/tmp/gradle-${GRADLE_VERSION}/bin" >> $GITHUB_PATH
+          gradle -v || true
+
+      - name: Regenerate Gradle wrapper
+        run: |
+          set -eux
+          /tmp/gradle-8.6/bin/gradle wrapper --gradle-version 8.6
+          chmod +x gradlew || true
+          if [ -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "wrapper jar size: $(stat -c%s gradle/wrapper/gradle-wrapper.jar)"
+          else
+            echo "gradle-wrapper.jar missing after generation" >&2
+            exit 1
+          fi
+
+      - name: Commit & push regenerated wrapper
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -eux
+          git config user.name "${GIT_AUTHOR_NAME}"
+          git config user.email "${GIT_AUTHOR_EMAIL}"
+          git add gradlew gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties || true
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "chore(gradle): add regenerated Gradle wrapper (8.6) [automated]" || true
+            git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || { echo "Push failed (branch protection or token permissions)"; exit 1; }
+          else
+            echo "No wrapper changes to commit"
+          fi
+
+      - name: Remove this temporary workflow
+        if: always()
+        run: |
+          set -eux
+          git rm -f .github/workflows/regenerate-wrapper.yml || true
+          git commit -m "ci: remove temporary regenerate-wrapper workflow" || echo "No workflow file to remove"
+          git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || echo "Cleanup push failed"
