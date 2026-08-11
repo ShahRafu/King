@@ -49,9 +49,11 @@ jobs:
       - name: Run unit tests
         run: |
           set -eux
-          # Prefer using the project gradle wrapper if present and executable.
-          if [ -x ./gradlew ]; then
+          # Only use the wrapper if both the script and wrapper JAR are present.
+          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Using project Gradle wrapper"
             ./gradlew test --no-daemon --stacktrace
           else
+            echo "Using system Gradle (installed via SDKMAN or preinstalled)"
             gradle test --no-daemon --stacktrace
           fi
