@@ -1,0 +1,341 @@
+*** Begin Patch
+*** Add File: app/src/main/java/com/shahrafuking/kingassistant/core/Scheduler.kt
++package com.shahrafuking.kingassistant.core
++
++import android.content.Context
++import androidx.work.Data
++import androidx.work.OneTimeWorkRequestBuilder
++import androidx.work.WorkManager
++import com.shahrafuking.kingassistant.net.trade.TradeOrder
++import java.util.concurrent.TimeUnit
++import com.shahrafuking.kingassistant.util.NumberParser
++
++/**
++ * Scheduler: helper to schedule simulated trades (dry-run) using WorkManager.
++ * Provides a small relative-time parser used by CommandHandler to schedule orders.
++ */
++object Scheduler {
++    private const val KEY_INSTRUMENT = "instrument"
++    private const val KEY_SIDE = "side"
++    private const val KEY_AMOUNT = "amount_usd"
++
++    /**
++     * Schedule a simulated trade after delayMs. Returns the WorkRequest id (String) for possible cancellation.
++     */
++    fun scheduleTrade(context: Context, order: TradeOrder, delayMs: Long): String {
++        val input = Data.Builder()
++            .putString(KEY_INSTRUMENT, order.instrument)
++            .putString(KEY_SIDE, order.side)
++        order.amountUsd?.let { input.putDouble(KEY_AMOUNT, it) }
++        val work = OneTimeWorkRequestBuilder<TradeWorker>()
++            .setInputData(input.build())
++            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
++            .build()
++        WorkManager.getInstance(context).enqueue(work)
++        return work.id.toString()
++    }
++
++    fun cancelScheduled(context: Context, workId: String) {
++        try {
++            val uuid = java.util.UUID.fromString(workId)
++            WorkManager.getInstance(context).cancelWorkById(uuid)
++        } catch (t: Throwable) {
++            // ignore invalid id
++        }
++    }
++
++    /**
++     * Parse relative time expressions like "5 মিনিট পরে" or "২ ঘণ্টা পরে" from free text and
++     * return delay in milliseconds. Returns null if no relative time parsed.
++     */
++    fun parseRelativeTime(text: String): Long? {
++        if (text.isBlank()) return null
++        val norm = NumberParser.normalizeDigits(text).lowercase()
++
++        // Try to match explicit numeric tokens followed by unit words
++        val direct = Regex("([0-9]+(?:[\\.,][0-9]+)?)\\s*(মিনিট|মিন|minute|minutes|ঘন্টা|ঘণ্টা|hour|hours|hr)")
++        val m = direct.find(norm)
++        if (m != null) {
++            val numText = m.groupValues[1]
++            val unit = m.groupValues[2]
++            val num = NumberParser.parseNumber(numText) ?: return null
++            return when (unit) {
++                "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> (num * 60.0 * 60.0 * 1000.0).toLong()
++                else -> (num * 60.0 * 1000.0).toLong()
++            }
++        }
++
++        // Fallback: find unit word and try to parse preceding token (which might be spelled out)
++        val unitWords = listOf("মিনিট", "মিন", "minute", "minutes", "ঘন্টা", "ঘণ্টা", "hour", "hours", "hr")
++        for (u in unitWords) {
++            val idx = norm.indexOf(u)
++            if (idx > 0) {
++                // take up to 20 chars before the unit and try to parse a number from it
++                val before = norm.substring(maxOf(0, idx - 20), idx).trim()
++                // extract last token
++                val token = before.split(Regex("\\s+"), -1).lastOrNull() ?: before
++                val num = NumberParser.parseNumber(token)
++                if (num != null) {
++                    return when (u) {
++                        "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> (num * 60.0 * 60.0 * 1000.0).toLong()
++                        else -> (num * 60.0 * 1000.0).toLong()
++                    }
++                }
++            }
++        }
++
++        return null
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Add File: app/src/main/java/com/shahrafuking/kingassistant/core/TradeWorker.kt
++package com.shahrafuking.kingassistant.core
++
++import android.content.Context
++import android.util.Log
++import androidx.work.CoroutineWorker
++import androidx.work.WorkerParameters
++import com.shahrafuking.kingassistant.net.trade.TradeOrder
++import com.shahrafuking.kingassistant.net.trade.SimulatedQuotexAdapter
++
++class TradeWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
++    private val TAG = "TradeWorker"
++
++    override suspend fun doWork(): Result {
++        try {
++            // Respect panic mode
++            if (PanicManager.isEngaged(applicationContext)) {
++                Log.w(TAG, "Skipping scheduled trade: panic engaged")
++                return Result.failure()
++            }
++
++            val instrument = inputData.getString("instrument") ?: "AUTO"
++            val side = inputData.getString("side") ?: "BUY"
++            val amount = if (inputData.keyValueMap.containsKey("amount_usd")) inputData.getDouble("amount_usd", Double.NaN) else Double.NaN
++            val amountUsd = if (amount.isNaN()) null else amount
++
++            val budgeted = try {
++                BudgetManager.applyBudgetCap(applicationContext, amountUsd)
++            } catch (t: Throwable) { amountUsd }
++
++            val order = TradeOrder(instrument = instrument, side = side, amountUsd = budgeted)
++            val adapter = SimulatedQuotexAdapter(applicationContext)
++            val res = adapter.executeOrder(order, dryRun = true)
++            Log.i(TAG, "Scheduled trade executed (dry-run): $res")
++            return Result.success()
++        } catch (t: Throwable) {
++            Log.w(TAG, "Scheduled trade failed", t)
++            return Result.retry()
++        }
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Update File: app/src/main/java/com/shahrafuking/kingassistant/core/CommandHandler.kt
+@@
+- (file replaced)
++package com.shahrafuking.kingassistant.core
++
++import android.content.Context
++import android.content.Intent
++import android.util.Log
++import com.shahrafuking.kingassistant.overlay.OverlayService
++import com.shahrafuking.kingassistant.net.trade.TradeOrder
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
++import com.shahrafuking.kingassistant.plugin.voiceplugin.ProductionEmbedderAdapter
++import com.shahrafuking.kingassistant.core.Scheduler
++import com.shahrafuking.kingassistant.util.NumberParser
++
++object CommandHandler {
++    private const val TAG = "CommandHandler"
++
++    /**
++     * Handle a single incoming command text (from voice or typed). Returns a short user-facing string.
++     */
++    suspend fun handle(context: Context, text: String): String = withContext(Dispatchers.IO) {
++        val lowered = text.lowercase()
++
++        // 1) Panic detection (Bengali forms + English)
++        val panicTriggers = listOf("সব ট্রেড বন্ধ", "সব ট্রেড বন্ধ করো", "সব ট্রেড থামাও", "panic", "stop all trades", "stop trades", "সব বন্ধ করো")
++        for (p in panicTriggers) {
++            if (lowered.contains(p)) {
++                // broadcast panic and set flag
++                try {
++                    PanicManager.engage(context)
++                } catch (t: Throwable) {
++                    Log.w(TAG, "failed to engage panic", t)
++                }
++                return@withContext "Panic command received — stopping all activities now."
++            }
++        }
++
++        // 1.a) Panic release via voice‑verified phrase
++        val releaseTriggers = listOf("এখন নরমাল হয়ে যাও কিং এসিস্টেন্ট", "এখন নরমাল হয়ে যাও কিং", "নরমাল হয়ে যাও কিং এসিস্টেন্ট")
++        for (r in releaseTriggers) {
++            if (lowered.contains(r)) {
++                // Only attempt release if panic is currently engaged
++                try {
++                    if (!PanicManager.isEngaged(context)) {
++                        return@withContext "Panic not engaged. Nothing to release."
++                    }
++
++                    // Perform voice verification by recording a short sample and verifying against template
++                    // Use ProductionEmbedderAdapter which records PCM and delegates to the plugin/embedder if available
++                    val verifierAdapter = ProductionEmbedderAdapter(context)
++                    val verified = try {
++                        // record ~1.8s and verify
++                        runCatching { kotlinx.coroutines.runBlocking { verifierAdapter.verify(1800) } }.getOrNull() ?: false
++                    } catch (t: Throwable) {
++                        false
++                    }
++
++                    if (verified) {
++                        PanicManager.release(context)
++                        return@withContext "ভয়েস ভেরিফিকেশন সফল — Panic released."
++                    } else {
++                        return@withContext "ভুল ভোকাল বা ভেরিফাই ব্যর্থ — Panic এখনও সক্রিয়।"
++                    }
++                } catch (t: Throwable) {
++                    Log.w(TAG, "release verification error", t)
++                    return@withContext "Release verification ব্যর্থ হয়েছে।"
++                }
++            }
++        }
++
++        // 1.b) Budget set / clear detection
++        val budgetSetTriggers = listOf("বাজেট", "budget", "limit", "বাজেট সেট", "set budget")
++        val budgetClearTriggers = listOf("বাজেট মুছে", "clear budget", "বাজেট কেটে দাও", "বাজেট ক্লিয়ার", "বাজেট মুছো")
++        for (tTrigger in budgetClearTriggers) {
++            if (lowered.contains(tTrigger)) {
++                try {
++                    BudgetManager.clearBudget(context)
++                } catch (t: Throwable) { Log.w(TAG, "clear budget failed", t) }
++                return@withContext "বাজেট মুছে ফেলা হয়েছে।"
++            }
++        }
++
++        for (bTrigger in budgetSetTriggers) {
++            if (lowered.contains(bTrigger)) {
++                // try to extract numeric amount robustly
++                val budget: Double? = NumberParser.parseNumber(text)
++                if (budget != null) {
++                    try { BudgetManager.setBudget(context, budget) } catch (t: Throwable) { Log.w(TAG, "set budget failed", t) }
++                    return@withContext "বাজেট সেট করা হয়েছে ${budget} ডলারে।"
++                } else {
++                    return@withContext "বাজেট সনাক্ত করা যায়নি — দয়া করে একটি নম্বর বলুন (যেমন: '২০ ডলার')."
++                }
++            }
++        }
++
++        // 2) Trade detection (simple heuristic)
++        val looksLikeTrade = lowered.contains("ট্রেড") || lowered.contains("trade") || lowered.contains("buy") || lowered.contains("sell") || lowered.contains("বাই") || lowered.contains("সেল")
++        if (looksLikeTrade) {
++            // try to extract budget/amount using NumberParser
++            var budget: Double? = NumberParser.parseNumber(text)
++
++            // Enforce budget cap if set
++            try {
++                budget = BudgetManager.applyBudgetCap(context, budget)
++            } catch (_: Throwable) {}
++
++            val order = TradeOrder(
++                instrument = "AUTO", // instrument resolution not implemented in this POC
++                side = if (lowered.contains("sell") || lowered.contains("সেল")) "SELL" else "BUY",
++                amountUsd = budget
++            )
++
++            // Check for scheduling keywords (e.g., "5 মিনিট পরে") and schedule if present
++            val delayMs = Scheduler.parseRelativeTime(text)
++            if (delayMs != null) {
++                try {
++                    val workId = Scheduler.scheduleTrade(context, order, delayMs)
++                    return@withContext "Scheduled simulated trade in ${delayMs / 60000} minutes (id=$workId)."
++                } catch (t: Throwable) {
++                    Log.w(TAG, "scheduling failed", t)
++                }
++            }
++
++            // Enqueue to executor immediately (dry-run)
++            val executor = com.shahrafuking.kingassistant.net.trade.TradeExecutorFactory.getDefault(context)
++            val result = executor.executeOrder(order, dryRun = true)
++            return@withContext "Simulated trade executed: ${result}"
++        }
++
++        // Default fallback
++        return@withContext "আদেশ গ্রহণ করা হয়নি — অনুগ্রহ করে পুনরায় চেষ্টা করুন।"
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Add File: app/src/test/java/com/shahrafuking/kingassistant/core/SchedulerTest.kt
++package com.shahrafuking.kingassistant.core
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class SchedulerTest {
++
++    @Test
++    fun testParseRelativeTimeMinutesEnglish() {
++        val t = "schedule trade in 5 minutes"
++        val ms = Scheduler.parseRelativeTime(t)
++        assertNotNull(ms)
++        assertEquals(5 * 60 * 1000L, ms)
++    }
++
++    @Test
++    fun testParseRelativeTimeMinutesBengaliDigits() {
++        val t = "৫ মিনিট পরে ট্রেড নাও"
++        val ms = Scheduler.parseRelativeTime(t)
++        assertNotNull(ms)
++        assertEquals(5 * 60 * 1000L, ms)
++    }
++
++    @Test
++    fun testParseRelativeTimeHoursBengali() {
++        val t = "২ ঘণ্টা পরে ট্রেড করো"
++        val ms = Scheduler.parseRelativeTime(t)
++        assertNotNull(ms)
++        assertEquals(2 * 60 * 60 * 1000L, ms)
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Add File: .github/workflows/android-ci.yml
++name: Android CI
++
++on:
++  push:
++    branches: [ main, feature/** ]
++  pull_request:
++    branches: [ main ]
++
++jobs:
++  test:
++    name: Run unit tests
++    runs-on: ubuntu-latest
++
++    steps:
++      - uses: actions/checkout@v4
++      - name: Set up JDK 17
++        uses: actions/setup-java@v4
++        with:
++          distribution: temurin
++          java-version: '17'
++      - name: Cache Gradle packages
++        uses: actions/cache@v4
++        with:
++          path: |
++            ~/.gradle/caches
++            ~/.gradle/wrapper
++          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }}
++      - name: Run unit tests
++        run: ./gradlew test --no-daemon
++
+*** End Patch
