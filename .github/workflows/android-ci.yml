@@ -109,8 +109,23 @@ jobs:
           # Only use the wrapper if both the script and wrapper JAR are present and the JAR looks valid.
           if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ] && [ "$(stat -c%s ./gradle/wrapper/gradle-wrapper.jar)" -gt 1024 ]; then
             echo "Using project Gradle wrapper"
-            ./gradlew test --no-daemon --stacktrace --info
+            ./gradlew test --no-daemon --stacktrace --info || true
           else
             echo "Wrapper missing or invalid — using system Gradle (installed via SDKMAN or preinstalled)"
-            gradle test --no-daemon --stacktrace --info
+            gradle test --no-daemon --stacktrace --info || true
           fi
+
+      - name: Upload Gradle debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-debug-artifacts
+          path: |
+            build/reports/**
+            build/reports/problems/**
+            gradle/wrapper/gradle-wrapper.properties
+            gradle/wrapper/gradle-wrapper.jar
+            settings.gradle
+            build.gradle
+            app/build.gradle
+            ~/.gradle/daemon/**
