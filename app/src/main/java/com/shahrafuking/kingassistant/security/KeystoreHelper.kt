@@ -96,9 +96,13 @@ object KeystoreHelper {
         }
     }
 
-    fun clear(ctx: Context, keyNameSuffix: String = "") {
-        try {
+    fun clear(ctx: Context, keyNameSuffix: String = ""): Boolean {
+        return try {
             getSharedPrefs(ctx).edit().remove(PREF_ENC_PREFIX + keyNameSuffix).apply()
-        } catch (_: Throwable) {}
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "clear error", t)
+            false
+        }
     }
 }
