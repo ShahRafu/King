@@ -51,7 +51,7 @@ object Scheduler {
         val norm = NumberParser.normalizeDigits(text).lowercase()
 
         // Try to match explicit numeric tokens followed by unit words
-        val direct = Regex("([0-9]+(?:[\\.,][0-9]+)?)\\s*(মিনিট|মিন|minute|minutes|ঘণ্টা|ঘন্টা|hour|hours|hr)")
+        val direct = Regex("([0-9]+(?:[\\.,][0-9]+)?)\\s*(মিনিট|মিন|minute|minutes|ঘন্টা|ঘণ্টা|hour|hours|hr)")
         val m = direct.find(norm)
         if (m != null) {
             val numText = m.groupValues[1]
@@ -64,7 +64,7 @@ object Scheduler {
         }
 
         // Fallback: find unit word and try to parse preceding token (which might be spelled out)
-        val unitWords = listOf("মিনিট", "মিন", "minute", "minutes", "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr")
+        val unitWords = listOf("মিনিট", "মিন", "minute", "minutes", "ঘন্টা", "ঘণ্টা", "hour", "hours", "hr")
         for (u in unitWords) {
             val idx = norm.indexOf(u)
             if (idx > 0) {
