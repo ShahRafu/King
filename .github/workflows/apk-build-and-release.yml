@@ -48,9 +48,12 @@ jobs:
       - name: Build Debug APK
         run: |
           set -eux
-          if [ -x ./gradlew ]; then
+          # Use project wrapper only if the wrapper script exists and the wrapper JAR looks valid (non-corrupted).
+          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ] && [ "$(stat -c%s ./gradle/wrapper/gradle-wrapper.jar)" -gt 1024 ]; then
+            echo "Using project Gradle wrapper"
             ./gradlew assembleDebug --stacktrace
           else
+            echo "Wrapper missing/invalid — using system Gradle (SDKMAN or preinstalled)"
             gradle assembleDebug --no-daemon --stacktrace
           fi
 
