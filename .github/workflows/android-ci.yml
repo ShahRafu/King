@@ -73,6 +73,28 @@ jobs:
             echo "gradle-wrapper.jar looks valid (size > 1024)"
           fi
 
+      - name: Print Java and Gradle versions
+        run: |
+          set -eux
+          echo "=== java -version ==="
+          java -version || true
+          echo "=== gradle (wrapper if present) -v ==="
+          if [ -x ./gradlew ]; then
+            ./gradlew -v || true
+          else
+            gradle -v || true
+          fi
+
+      - name: Force Gradle project evaluation (debug)
+        run: |
+          set -eux
+          # Run tasks to force configuration and show debug stacktrace
+          if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ]; then
+            ./gradlew tasks --all --no-daemon --stacktrace --debug || true
+          else
+            gradle tasks --all --no-daemon --stacktrace --debug || true
+          fi
+
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
