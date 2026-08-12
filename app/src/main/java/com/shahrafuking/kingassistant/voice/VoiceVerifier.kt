@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.shahrafuking.kingassistant.memory.MemoryDatabase
 import com.shahrafuking.kingassistant.memory.MemoryRepository
+import com.shahrafuking.kingassistant.security.KeystoreHelper
 
 /**
  * VoiceVerifier handles enrollment storage (Keystore) and integrates with the
