@@ -72,6 +72,9 @@ dependencies {
     // SQLCipher (used by MemoryDatabase at runtime). Include for compilation so the SupportFactory class is available.
     implementation "net.zetetic:android-database-sqlcipher:4.5.0"
 
+    // TensorFlow Lite for speaker embedder
+    implementation "org.tensorflow:tensorflow-lite:2.11.0"
+
     // Unit test dependencies (Robolectric + AndroidX test-core for ApplicationProvider)
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'androidx.test:core:1.5.0'
