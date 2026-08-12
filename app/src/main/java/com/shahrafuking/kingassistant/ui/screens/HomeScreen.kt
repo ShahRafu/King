@@ -5,7 +5,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +32,7 @@ fun HomeScreen(
             }
             Text(text = "King Assistant", style = MaterialTheme.typography.h6)
             IconButton(onClick = { /* security */ }) {
-                Icon(Icons.Default.Security, contentDescription = "Security")
+                Icon(Icons.Default.Lock, contentDescription = "Security")
             }
         }
 

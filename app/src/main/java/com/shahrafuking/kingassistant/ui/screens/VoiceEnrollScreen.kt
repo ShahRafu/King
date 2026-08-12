@@ -20,11 +20,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     var ownerName by remember { mutableStateOf("") }
     var isRecording by remember { mutableStateOf(false) }
     var samples by remember { mutableStateOf(listOf<String>()) }
     var status by remember { mutableStateOf("শুরু করুন") }
-    val ctx = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         OutlinedTextField(value = ownerName, onValueChange = { ownerName = it }, label = { Text("আপনার নাম") }, modifier = Modifier.fillMaxWidth())
