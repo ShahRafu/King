@@ -8,6 +8,7 @@ import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -23,6 +24,7 @@ fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
     var isRecording by remember { mutableStateOf(false) }
     var samples by remember { mutableStateOf(listOf<String>()) }
     var status by remember { mutableStateOf("শুরু করুন") }
+    val ctx = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         OutlinedTextField(value = ownerName, onValueChange = { ownerName = it }, label = { Text("আপনার নাম") }, modifier = Modifier.fillMaxWidth())
@@ -36,7 +38,6 @@ fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
                 status = "রেকর্ডিং শুরু..."
                 scope.launch {
                     try {
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         val mgr = com.shahrafuking.kingassistant.security.VoiceEnrollmentManager(ctx.applicationContext)
                         val path = mgr.recordSample("enroll_${samples.size + 1}", durationMs = 2000)
                         samples = samples + path
@@ -56,7 +57,6 @@ fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
                 status = "এনরোল করা হচ্ছে..."
                 scope.launch {
                     try {
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         val mgr = com.shahrafuking.kingassistant.security.VoiceEnrollmentManager(ctx.applicationContext)
                         val profileId = mgr.enrollProfile(ownerName, samples)
                         status = "এনরোল সম্পন্ন: $profileId"
