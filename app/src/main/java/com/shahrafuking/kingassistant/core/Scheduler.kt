@@ -57,10 +57,11 @@ object Scheduler {
             val numText = m.groupValues[1]
             val unit = m.groupValues[2]
             val num = NumberParser.parseNumber(numText) ?: return null
-            return when (unit) {
-                "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> (num * 60.0 * 60.0 * 1000.0).toLong()
-                else -> (num * 60.0 * 1000.0).toLong()
+            val multiplier = when (unit) {
+                "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> 60.0 * 60.0 * 1000.0
+                else -> 60.0 * 1000.0
             }
+            return (num * multiplier).toLong()
         }
 
         // Fallback: find unit word and try to parse preceding token (which might be spelled out)
@@ -74,10 +75,11 @@ object Scheduler {
                 val token = before.split(Regex("\\s+"), -1).lastOrNull() ?: before
                 val num = NumberParser.parseNumber(token)
                 if (num != null) {
-                    return when (u) {
-                        "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> (num * 60.0 * 60.0 * 1000.0).toLong()
-                        else -> (num * 60.0 * 1000.0).toLong()
+                    val multiplier = when (u) {
+                        "ঘণ্টা", "ঘন্টা", "hour", "hours", "hr" -> 60.0 * 60.0 * 1000.0
+                        else -> 60.0 * 1000.0
                     }
+                    return (num * multiplier).toLong()
                 }
             }
         }
