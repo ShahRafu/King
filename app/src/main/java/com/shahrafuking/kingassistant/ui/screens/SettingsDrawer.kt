@@ -4,8 +4,8 @@ import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
@@ -62,7 +62,7 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
 fun SettingsToggleRow(title: String, subtitle: String, prefs: SharedPreferences, key: String) {
     var enabled by remember { mutableStateOf(prefs.getBoolean(key, false)) }
     Row(modifier = Modifier.padding(vertical = 8.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.fillMaxWidth(0.8f)) {
             Text(title)
             Text(subtitle, style = MaterialTheme.typography.caption)
         }

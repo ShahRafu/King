@@ -4,18 +4,19 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.ListenableWorker.Result as WorkResult
 import com.shahrafuking.kingassistant.net.trade.TradeOrder
 import com.shahrafuking.kingassistant.net.trade.SimulatedQuotexAdapter
 
 class TradeWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     private val TAG = "TradeWorker"
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): WorkResult {
         try {
             // Respect panic mode
             if (PanicManager.isEngaged(applicationContext)) {
                 Log.w(TAG, "Skipping scheduled trade: panic engaged")
-                return Result.failure()
+                return WorkResult.failure()
             }
 
             val instrument = inputData.getString("instrument") ?: "AUTO"
@@ -31,10 +32,10 @@ class TradeWorker(appContext: Context, params: WorkerParameters) : CoroutineWork
             val adapter = SimulatedQuotexAdapter(applicationContext)
             val res = adapter.executeOrder(order, dryRun = true)
             Log.i(TAG, "Scheduled trade executed (dry-run): $res")
-            return Result.success()
+            return WorkResult.success()
         } catch (t: Throwable) {
             Log.w(TAG, "Scheduled trade failed", t)
-            return Result.retry()
+            return WorkResult.retry()
         }
     }
 }
