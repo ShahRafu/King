@@ -1,7 +1,13 @@
+package com.shahrafuking.kingassistant.util
+
 /**
  * Replace Bengali digits with ASCII digits and return the normalized string.
  * Leaves other characters untouched.
  */
+private val bengaliToAscii = mapOf(
+    '০' to '0','১' to '1','২' to '2','৩' to '3','৪' to '4','৫' to '5','৬' to '6','৭' to '7','৮' to '8','৯' to '9'
+)
+
 fun normalizeDigits(input: String): String {
     val sb = StringBuilder(input.length)
     for (c in input) {
@@ -13,11 +19,6 @@ fun normalizeDigits(input: String): String {
 /**
  * Try to parse a number out of the given text.
  * Returns Double? (null if no parsable number).
- *
- * Behaviour:
- *  - normalize Bengali digits to ASCII
- *  - remove common currency words/symbols and non numeric characters except dot and comma
- *  - accept either '.' or ',' as decimal separator (prefers '.')
  */
 fun parseNumber(text: String?): Double? {
     if (text == null) return null
