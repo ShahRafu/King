@@ -5,19 +5,33 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 class TradingServiceIntegrationTest {
 
+    private lateinit var simulator: TradeSimulator
+    private lateinit var budget: InMemoryBudgetController
+    private lateinit var service: TradingService
+
+    @Before
+    fun setup() {
+        simulator = TradeSimulator()
+        budget = InMemoryBudgetController(100.0)
+        service = TradingService(simulator, budget)
+    }
+
+    @After
+    fun tearDown() = runBlocking {
+        simulator.shutdown()
+    }
+
     @Test
     fun submitOrder_reducesBalance_onFill() = runBlocking {
         val startBalance = 100.0
-        val budget = InMemoryBudgetController(startBalance)
-        val simulator = TradeSimulator()
-        val service = TradingService(simulator, budget)
-
         val order = Order(symbol = "TEST", side = Side.BUY, amount = 10.0)
         val id = service.submitOrder(order)
 
@@ -27,7 +41,6 @@ class TradingServiceIntegrationTest {
         }
         assertTrue(ev is OrderEvent.Filled)
 
-        // Final balance should be start - amount (reserve deducted at submit)
         val bal = budget.getBalance()
         assertEquals(startBalance - order.amount, bal, 0.0001)
     }
@@ -35,24 +48,17 @@ class TradingServiceIntegrationTest {
     @Test
     fun cancelOrder_restoresBalance_onCancel() = runBlocking {
         val startBalance = 100.0
-        val budget = InMemoryBudgetController(startBalance)
-        val simulator = TradeSimulator()
-        val service = TradingService(simulator, budget)
-
         val order = Order(symbol = "TEST2", side = Side.SELL, amount = 25.0)
         val id = service.submitOrder(order)
 
-        // Cancel immediately
         val cancelled = service.cancelOrder(id)
         assertTrue(cancelled)
 
-        // Wait for cancelled event
         val ev = withTimeout(2000L) {
             simulator.orderEvents.first { it is OrderEvent.Cancelled && (it as OrderEvent.Cancelled).orderId == id }
         }
         assertTrue(ev is OrderEvent.Cancelled)
 
-        // Balance should be restored
         val bal = budget.getBalance()
         assertEquals(startBalance, bal, 0.0001)
     }
