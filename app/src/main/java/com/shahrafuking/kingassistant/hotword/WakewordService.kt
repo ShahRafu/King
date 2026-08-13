@@ -15,11 +15,6 @@ import kotlinx.coroutines.*
 
 /**
  * Foreground service that runs the audio recorder and hotword engine.
- * - Starts AudioRecorder
- * - Pipes PCM frames to HotwordEngineAdapter
- *
- * NOTE: This is a skeleton for POC. Add real Porcupine (Picovoice) dependency
- * and PORCOVINE_KEY via local.properties or GitHub Secret before enabling.
  */
 class WakewordService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
