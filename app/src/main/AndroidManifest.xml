@@ -47,5 +47,10 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- LLM Test / Model Management UI (for on-device mock testing) -->
+        <activity
+            android:name=".ui.LLMTestActivity"
+            android:exported="false" />
+
     </application>
 </manifest>
