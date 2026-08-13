@@ -1,124 +1,163 @@
 package com.shahrafuking.kingassistant.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import com.shahrafuking.kingassistant.R
-import com.shahrafuking.kingassistant.voice.VoiceEnrollmentManager
-import com.shahrafuking.kingassistant.voice.VoiceVerifier
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.core.app.ActivityCompat
+import com.shahrafuking.kingassistant.security.KeystoreHelper
+import com.shahrafuking.kingassistant.security.SecurityUtils
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import android.util.Base64
+import kotlinx.coroutines.*
 
+/**
+ * Simple EnrollmentActivity that records a short audio sample (PCM) and
+ * produces a simple "template" (SHA-256 of the raw PCM) which is stored
+ * encrypted using KeystoreHelper.
+ *
+ * This is intentionally minimal and safe: it does NOT compute ML embeddings here.
+ * Replace the placeholder "template" generation with your model-based embedder.
+ *
+ * The Activity returns RESULT_OK when enrollment completed successfully.
+ */
 class EnrollmentActivity : AppCompatActivity() {
+    private val SAMPLE_RATE = 16000
+    private val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+    private val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+    private val RECORD_SECONDS = 4 // record 4 seconds for enrollment
+    private val TEMPLATE_KEY = "voice_enrollment_template_v1"
+
     private lateinit var statusTv: TextView
-    private lateinit var startBtn: Button
-    private lateinit var progress: ProgressBar
+    private lateinit var btnRecord: Button
+    private lateinit var progressBar: ProgressBar
 
-    private val enrollmentManager by lazy { VoiceEnrollmentManager(this) }
-    private val verifier by lazy { VoiceVerifier(this) }
+    private var recordingJob: Job? = null
 
-    private val samplesRequired = 3
-    private val samples = mutableListOf<DoubleArray>()
-
-    // Max retry attempts per sample
-    private val maxRetriesPerSample = 3
-
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    private val requestMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) {
-            Toast.makeText(this, "Microphone permission required", Toast.LENGTH_LONG).show()
-        } else {
-            startEnrollmentFlow()
+            Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_LONG).show()
+            setResult(Activity.RESULT_CANCELED)
+            finish()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_enrollment)
-        statusTv = findViewById(R.id.enroll_status)
-        startBtn = findViewById(R.id.enroll_btn)
-        progress = findViewById(R.id.enroll_progress)
 
-        startBtn.setOnClickListener {
-            val perm = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            if (perm != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                return@setOnClickListener
-            }
-            startEnrollmentFlow()
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 32, 32, 32)
+        }
+
+        statusTv = TextView(this).apply { text = "Enrollment: ready" }
+        btnRecord = Button(this).apply { text = "Start Enrollment (record ~4s)"; setOnClickListener { startEnrollment() } }
+        progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0 }
+
+        layout.addView(statusTv)
+        layout.addView(btnRecord)
+        layout.addView(progressBar)
+        setContentView(layout)
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestMicrophone.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    private fun startEnrollmentFlow() {
-        samples.clear()
-        progress.max = samplesRequired
-        progress.progress = 0
-        statusTv.text = "Enrollment: speak the passphrase when prompted.\nSamples needed: $samplesRequired"
+    private fun startEnrollment() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Microphone permission missing", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        CoroutineScope(Dispatchers.Main).launch {
-            var sampleIndex = 1
-            while (sampleIndex <= samplesRequired) {
-                statusTv.text = "Recording sample $sampleIndex of $samplesRequired — Speak: \"King Assistant\" (or Bengali equivalent)"
-                // small delay to let user get ready
-                withContext(Dispatchers.IO) { Thread.sleep(600) }
+        btnRecord.isEnabled = false
+        statusTv.text = "Recording..."
+        progressBar.progress = 0
 
-                var attempt = 0
-                var features: DoubleArray? = null
-                while (attempt < maxRetriesPerSample && features == null) {
-                    attempt++
-                    statusTv.text = "Recording sample $sampleIndex (attempt $attempt of $maxRetriesPerSample)..."
-                    features = enrollmentManager.recordAndExtract(2400)
-                    if (features == null) {
-                        // failed attempt
-                        statusTv.text = "Recording attempt $attempt failed. ${if (attempt < maxRetriesPerSample) "Retrying..." else "Please retry the sample."}"
-                        withContext(Dispatchers.IO) { Thread.sleep(500) }
+        recordingJob = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+                val bufferSize = maxOf(minBuf, SAMPLE_RATE * 2)
+                val recorder = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+                val audioFile = File(filesDir, "enrollment_raw.pcm")
+                if (audioFile.exists()) audioFile.delete()
+                val fos = FileOutputStream(audioFile)
+
+                val shortBuf = ShortArray(bufferSize / 2)
+                recorder.startRecording()
+                val totalFrames = SAMPLE_RATE * RECORD_SECONDS
+                var framesRead = 0
+                while (framesRead < totalFrames && isActive) {
+                    val toRead = minOf(shortBuf.size, totalFrames - framesRead)
+                    val r = recorder.read(shortBuf, 0, toRead)
+                    if (r > 0) {
+                        // write raw PCM little-endian
+                        val byteBuf = ShortArrayToByteArray(shortBuf, r)
+                        fos.write(byteBuf)
+                        framesRead += r
+                        val p = (framesRead.toFloat() / totalFrames.toFloat() * 100).toInt()
+                        withContext(Dispatchers.Main) { progressBar.progress = p }
+                    } else {
+                        delay(10)
                     }
                 }
+                recorder.stop()
+                recorder.release()
+                fos.flush()
+                fos.close()
 
-                if (features == null) {
-                    // exhausted retries for this sample — give user option to restart entire enrollment
-                    statusTv.text = "Failed to capture sample $sampleIndex after $maxRetriesPerSample attempts. Enrollment aborted."
-                    Toast.makeText(this@EnrollmentActivity, "Recording failed. Please retry enrollment from the start.", Toast.LENGTH_LONG).show()
-                    return@launch
-                }
+                // Simple placeholder "template": SHA-256 of the raw PCM file
+                val pcmBytes = audioFile.readBytes()
+                val sha = MessageDigest.getInstance("SHA-256").digest(pcmBytes)
+                val templateB64 = Base64.encodeToString(sha, Base64.NO_WRAP)
 
-                samples.add(features)
-                progress.progress = samples.size
-                statusTv.text = "Captured sample $sampleIndex"
-                // short pause
-                withContext(Dispatchers.IO) { Thread.sleep(400) }
-                sampleIndex++
-            }
+                // Store encrypted via KeystoreHelper
+                KeystoreHelper.encryptAndStoreString(this@EnrollmentActivity, TEMPLATE_KEY, templateB64)
 
-            // average vectors
-            if (samples.isNotEmpty()) {
-                val n = samples.size
-                val len = samples[0].size
-                val avg = DoubleArray(len)
-                for (s in samples) for (k in 0 until len) avg[k] += s[k] / n
-                val success = verifier.saveTemplate(avg)
-                if (success) {
-                    statusTv.text = "Enrollment complete — voice template saved securely."
-                    Toast.makeText(this@EnrollmentActivity, "Enrollment successful", Toast.LENGTH_LONG).show()
-                    setResult(RESULT_OK)
+                withContext(Dispatchers.Main) {
+                    statusTv.text = "Enrollment saved."
+                    Toast.makeText(this@EnrollmentActivity, "Enrollment completed", Toast.LENGTH_SHORT).show()
+                    setResult(Activity.RESULT_OK)
                     finish()
-                } else {
-                    statusTv.text = "Failed to save template."
-                    Toast.makeText(this@EnrollmentActivity, "Save failed", Toast.LENGTH_LONG).show()
                 }
-            } else {
-                statusTv.text = "No samples captured."
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@EnrollmentActivity, "Enrollment failed: ${t.localizedMessage}", Toast.LENGTH_LONG).show()
+                    statusTv.text = "Enrollment failed"
+                    btnRecord.isEnabled = true
+                }
             }
         }
+    }
+
+    override fun onDestroy() {
+        recordingJob?.cancel()
+        super.onDestroy()
+    }
+
+    private fun ShortArrayToByteArray(src: ShortArray, length: Int): ByteArray {
+        val out = ByteArray(length * 2)
+        var i = 0
+        var o = 0
+        while (i < length) {
+            val s = src[i].toInt()
+            out[o++] = (s and 0x00FF).toByte()
+            out[o++] = ((s shr 8) and 0x00FF).toByte()
+            i++
+        }
+        return out
     }
 }
