@@ -7,30 +7,47 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * AccessibilityService scaffold for auto-click gestures.
- * WARNING: may violate broker TOS; use only with legal consent.
+ * AutoClickService: minimal AccessibilityService scaffold.
+ * - On connection it logs. performTap(x,y) performs a single-tap gesture via dispatchGesture.
+ * - IMPORTANT: This service contains powerful abilities — keep it disabled until you review policy and ask users for explicit opt-in.
  */
 class AutoClickService : AccessibilityService() {
-    private val TAG = "AutoClickService"
+    companion object {
+        private const val TAG = "AutoClickService"
+    }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-    override fun onInterrupt() { Log.i(TAG, "AutoClickService interrupted") }
-    override fun onServiceConnected() { Log.i(TAG, "AutoClickService connected") }
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.i(TAG, "AutoClickService connected")
+    }
 
-    fun clickAt(x: Float, y: Float) {
-        val path = Path().apply { moveTo(x, y) }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // no-op; we use this service only to dispatch gestures when explicitly requested
+    }
+
+    override fun onInterrupt() {
+        // no-op
+    }
+
+    /**
+     * Perform a single tap at (x,y) in screen coordinates.
+     * This method should be guarded by an explicit user opt-in flag in your app before use.
+     */
+    fun performTap(x: Float, y: Float, callback: ((Boolean) -> Unit)? = null) {
+        val p = Path().apply { moveTo(x, y) }
         val desc = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 50))
+            .addStroke(GestureDescription.StrokeDescription(p, 0, 50))
             .build()
-        dispatchGesture(desc, object : GestureResultCallback() {
+        val dispatched = dispatchGesture(desc, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 super.onCompleted(gestureDescription)
-                Log.i(TAG, "Gesture completed at $x,$y")
+                callback?.invoke(true)
             }
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 super.onCancelled(gestureDescription)
-                Log.w(TAG, "Gesture cancelled")
+                callback?.invoke(false)
             }
         }, null)
+        Log.i(TAG, "performTap requested -> dispatched=$dispatched")
     }
 }
