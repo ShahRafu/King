@@ -35,14 +35,15 @@ class WakewordService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         scope.launch {
-            recorder.start { pcmBuffer, sampleRate ->
+            // explicitly annotate lambda parameter types so compiler can infer correctly
+            recorder.start({ pcmBuffer: ShortArray, sampleRate: Int ->
                 // Pass audio buffer to hotword engine
                 val detected = engine.process(pcmBuffer, sampleRate)
                 if (detected) {
                     // TODO: trigger authentication flow or notify UI
                     engine.onHotwordDetected()
                 }
-            }
+            }, AudioRecorder.DEFAULT_SAMPLE_RATE)
         }
         return START_STICKY
     }
