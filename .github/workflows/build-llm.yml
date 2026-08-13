@@ -1,0 +1,59 @@
+name: Build LLM native libs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-llm:
+    name: Build llama.cpp JNI bridge (arm64-v8a)
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_API_LEVEL: 24
+      ABI: arm64-v8a
+      NDK_VERSION: r25b
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential unzip wget python3-pip git
+
+      - name: Download Android NDK
+        run: |
+          echo "Downloading NDK ${NDK_VERSION}..."
+          NDK_ZIP=android-ndk-${NDK_VERSION}-linux.zip
+          wget -q https://dl.google.com/android/repository/${NDK_ZIP}
+          unzip -q ${NDK_ZIP} -d $HOME
+          export ANDROID_NDK=$HOME/android-ndk-${NDK_VERSION}
+          echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/build-llama-android.sh || true
+
+      - name: Run cross-compile script
+        run: |
+          echo "Building llama.cpp and llmbridge (ABI=${{ env.ABI }}, API=${{ env.ANDROID_API_LEVEL }})"
+          ./scripts/build-llama-android.sh ${{ env.ABI }} ${{ env.ANDROID_API_LEVEL }}
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_NDK }}
+
+      - name: Upload libllmbridge.so artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libllmbridge-${{ env.ABI }}
+          path: app/src/main/jniLibs/${{ env.ABI }}/libllmbridge.so
+
+      - name: Upload full llm build directory (optional)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-build-artifacts
+          path: scripts/llama.cpp/build-android-${{ env.ABI }}
