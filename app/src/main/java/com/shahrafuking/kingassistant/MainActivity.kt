@@ -15,111 +15,92 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.shahrafuking.kingassistant.overlay.OverlayPermissionHelper
 import com.shahrafuking.kingassistant.overlay.OverlayService
+import com.shahrafuking.kingassistant.voice.VoiceCommandManager
+import com.shahrafuking.kingassistant.voice.VoiceRecognizer
 import com.shahrafuking.kingassistant.voice.VoiceVerifier
+import com.shahrafuking.kingassistant.trade.BudgetManager
+import com.shahrafuking.kingassistant.trading.PanicStopManager
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private val REQ_OVERLAY = 4242
     private val REQ_AUDIO = 4243
 
     private lateinit var statusText: TextView
-    private val verifier by lazy { VoiceVerifier(this) }
+    private val recognizer by lazy { VoiceRecognizer(this) }
 
-    // ActivityResult launchers for Enrollment & Verification activities
-    private val enrollLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            Toast.makeText(this, "Enrollment completed. Please verify.", Toast.LENGTH_SHORT).show()
-            // After enrollment, start verification
-            startVerificationActivity()
-        } else {
-            Toast.makeText(this, "Enrollment not completed.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private val verifyLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            Toast.makeText(this, "Verification successful.", Toast.LENGTH_SHORT).show()
-            // Now ensure permissions and start overlay service
-            ensurePermissionsAndStartOverlayService()
-        } else {
-            Toast.makeText(this, "Verification failed or cancelled.", Toast.LENGTH_LONG).show()
+    private val requestMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_LONG).show()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Simple UI: status + start overlay button + stop overlay button
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
         }
         statusText = TextView(this).apply { text = "King Assistant — status: idle" }
+
         val btnStart = Button(this).apply {
-            text = "Start (ensure verification)"
+            text = "Start Overlay (ensure verification)"
             setOnClickListener { onStartClicked() }
         }
-        val btnStop = Button(this).apply {
-            text = "Stop Overlay Service"
-            setOnClickListener { stopOverlayService() }
+
+        val btnDemoListen = Button(this).apply {
+            text = "Demo: Start voice listen"
+            setOnClickListener { demoStartListening() }
+        }
+
+        val btnSimSetBudget = Button(this).apply {
+            text = "Demo: Set budget $100"
+            setOnClickListener { demoSetBudget(100.0) }
+        }
+
+        val btnSimTrade = Button(this).apply {
+            text = "Demo: Simulate trade $10"
+            setOnClickListener { demoSimulateTrade(10.0) }
+        }
+
+        val btnPanic = Button(this).apply {
+            text = "Trigger PanicStop"
+            setOnClickListener { demoPanicStop() }
         }
 
         layout.addView(statusText)
         layout.addView(btnStart)
-        layout.addView(btnStop)
+        layout.addView(btnDemoListen)
+        layout.addView(btnSimSetBudget)
+        layout.addView(btnSimTrade)
+        layout.addView(btnPanic)
         setContentView(layout)
 
-        // On app start, check whether user is enrolled; route accordingly
-        // Ensure RECORD_AUDIO permission first (both enrollment & verification need mic)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
-        } else {
-            routeForEnrollmentOrVerification()
         }
     }
 
     private fun onStartClicked() {
-        // Allow user to manually trigger verification if desired
-        routeForEnrollmentOrVerification()
+        // Start overlay service after permissions
+        ensurePermissionsAndStartOverlayService()
     }
 
-    private fun routeForEnrollmentOrVerification() {
-        val template = verifier.loadTemplate()
-        if (template == null) {
-            // not enrolled -> launch EnrollmentActivity
-            startEnrollmentActivity()
-        } else {
-            // already enrolled -> launch VerificationActivity
-            startVerificationActivity()
-        }
-    }
-
-    private fun startEnrollmentActivity() {
-        val intent = Intent(this, com.shahrafuking.kingassistant.ui.EnrollmentActivity::class.java)
-        enrollLauncher.launch(intent)
-    }
-
-    private fun startVerificationActivity() {
-        val intent = Intent(this, com.shahrafuking.kingassistant.ui.VerificationActivity::class.java)
-        verifyLauncher.launch(intent)
-    }
-
-    // Called after enrollment/verification success to ensure overlay and mic permissions and start overlay
-    fun ensurePermissionsAndStartOverlayService() {
-        // 1) RECORD_AUDIO permission
+    private fun ensurePermissionsAndStartOverlayService() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
             return
         }
 
-        // 2) Overlay permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             OverlayPermissionHelper.requestOverlayPermission(this, REQ_OVERLAY)
             return
         }
 
-        // 3) Start overlay service
         val intent = Intent(this, OverlayService::class.java).apply {
             putExtra(OverlayService.EXTRA_SHOW_OVERLAY, true)
         }
@@ -131,21 +112,98 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "King Assistant — Overlay started (awaiting voice)"
     }
 
-    private fun stopOverlayService() {
-        val stopIntent = Intent(this, OverlayService::class.java).apply {
-            action = OverlayService.ACTION_STOP_SERVICE
+    private fun demoStartListening() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestMicrophone.launch(Manifest.permission.RECORD_AUDIO)
+            return
         }
-        startService(stopIntent)
-        statusText.text = "King Assistant — Overlay stop requested"
+        statusText.text = "Listening (demo)..."
+        recognizer.startListening({ text ->
+            runOnUiThread {
+                statusText.text = "Heard: $text"
+                handleRecognizedText(text)
+            }
+        }, { err ->
+            runOnUiThread { Toast.makeText(this, "Recognizer error: $err", Toast.LENGTH_LONG).show() }
+        })
+    }
+
+    private fun handleRecognizedText(text: String) {
+        val cmd = VoiceCommandManager.parse(text)
+        when (cmd) {
+            is com.shahrafuking.kingassistant.voice.Command.Trade -> {
+                // Require enrollment present (demo-only: no live verification with PCM here)
+                val template = VoiceVerifier.loadTemplate(this)
+                if (template == null) {
+                    Toast.makeText(this, "Not enrolled: run Enrollment first", Toast.LENGTH_LONG).show()
+                    return
+                }
+                lifecycleScope.launch {
+                    val bm = BudgetManager(this@MainActivity)
+                    val ok = bm.checkAndReserve(cmd.amount)
+                    runOnUiThread {
+                        if (ok) Toast.makeText(this@MainActivity, "Trade reserved: ${cmd.amount}", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(this@MainActivity, "Insufficient budget for ${cmd.amount}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            is com.shahrafuking.kingassistant.voice.Command.SetBudget -> {
+                // require enrollment
+                val template = VoiceVerifier.loadTemplate(this)
+                if (template == null) {
+                    Toast.makeText(this, "Not enrolled: run Enrollment first", Toast.LENGTH_LONG).show()
+                    return
+                }
+                lifecycleScope.launch {
+                    val bm = BudgetManager(this@MainActivity)
+                    bm.setBudget(cmd.amount)
+                    runOnUiThread { Toast.makeText(this@MainActivity, "Budget set: ${cmd.amount}", Toast.LENGTH_SHORT).show() }
+                }
+            }
+            is com.shahrafuking.kingassistant.voice.Command.PanicStop -> {
+                PanicStopManager.triggerPanicStop()
+                Toast.makeText(this, "PanicStop triggered", Toast.LENGTH_SHORT).show()
+            }
+            is com.shahrafuking.kingassistant.voice.Command.QueryStatus -> {
+                Toast.makeText(this, "QueryStatus (demo)", Toast.LENGTH_SHORT).show()
+            }
+            is com.shahrafuking.kingassistant.voice.Command.Unknown -> {
+                Toast.makeText(this, "Unknown command: ${cmd.raw}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun demoSetBudget(amount: Double) {
+        lifecycleScope.launch {
+            val bm = BudgetManager(this@MainActivity)
+            bm.setBudget(amount)
+            runOnUiThread { Toast.makeText(this@MainActivity, "Budget set: $amount", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun demoSimulateTrade(amount: Double) {
+        lifecycleScope.launch {
+            val bm = BudgetManager(this@MainActivity)
+            val ok = bm.checkAndReserve(amount)
+            runOnUiThread {
+                if (ok) Toast.makeText(this@MainActivity, "Simulated trade reserved: $amount", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(this@MainActivity, "Insufficient budget", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun demoPanicStop() {
+        PanicStopManager.triggerPanicStop()
+        Toast.makeText(this, "PanicStop triggered (demo)", Toast.LENGTH_SHORT).show()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_AUDIO) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                routeForEnrollmentOrVerification()
+                // ok
             } else {
-                Toast.makeText(this, "Microphone permission required for enrollment/verification", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Microphone permission required", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -153,11 +211,12 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_OVERLAY) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                ensurePermissionsAndStartOverlayService()
-            } else {
-                Toast.makeText(this, "Overlay permission required", Toast.LENGTH_LONG).show()
-            }
+            ensurePermissionsAndStartOverlayService()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        recognizer.stopListening()
     }
 }
