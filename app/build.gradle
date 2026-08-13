@@ -93,6 +93,9 @@ dependencies {
     // Duktape for local JS plugin sandbox (no network/file access exposed)
     implementation 'com.squareup.duktape:duktape-android:1.3.0'
 
+    // Encrypted SharedPreferences for PIN storage
+    implementation 'androidx.security:security-crypto:1.0.0'
+
     // Unit test dependencies (Robolectric + AndroidX test-core for ApplicationProvider)
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'androidx.test:core:1.5.0'
