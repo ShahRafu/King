@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
 
     <application
         android:allowBackup="true"
@@ -50,6 +52,11 @@
         <!-- LLM Test / Model Management UI (for on-device mock testing) -->
         <activity
             android:name=".ui.LLMTestActivity"
+            android:exported="false" />
+
+        <!-- High Security Approval UI -->
+        <activity
+            android:name=".ui.HighSecurityApprovalActivity"
             android:exported="false" />
 
     </application>
