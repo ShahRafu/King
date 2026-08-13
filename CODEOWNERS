@@ -1,0 +1,3 @@
+# Sanitize Kotlin sources: remove accidental metadata headers and add CI sanitization step
+
+This branch removes the accidental leading "name=... url=..." headers from all Kotlin source files and adds a pre-build sanitization step to the GitHub Actions workflow so future headers won't break the build.
