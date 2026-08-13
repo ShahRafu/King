@@ -1,0 +1,21 @@
+name: JVM unit tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Run tests
+        run: ./gradlew test --no-daemon --console=plain
