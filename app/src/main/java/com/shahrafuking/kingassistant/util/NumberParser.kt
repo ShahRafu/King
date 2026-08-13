@@ -1,3 +1,4 @@
+name=app/src/main/java/com/shahrafuking/kingassistant/util/NumberParser.kt url=https://github.com/ShahRafu/King/blob/main/app/src/main/java/com/shahrafuking/kingassistant/util/NumberParser.kt
 package com.shahrafuking.kingassistant.util
 
 /**
