@@ -1,5 +1,8 @@
 name: Build Debug APK
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main, master ]
@@ -12,6 +15,34 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sanitize Kotlin sources
+        run: |
+          echo "Sanitizing Kotlin sources: removing leading metadata header lines if present"
+          files=$(git ls-files '*.kt')
+          changed=0
+          for f in $files; do
+            # If first line matches the header pattern, remove it
+            if awk 'NR==1 && /^\s*name=.*url=.*$/ {exit 0} {exit 1}' "$f"; then
+              awk 'NR==1 && /^\s*name=.*url=.*$/ {next} {print}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+              changed=1
+            fi
+          done
+          if [ "$changed" -eq 1 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add $files
+            if ! git diff --cached --quiet; then
+              git commit -m "ci: sanitize stray metadata headers in Kotlin files"
+              git push
+            else
+              echo "No changes to commit"
+            fi
+          else
+            echo "No Kotlin headers found"
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
