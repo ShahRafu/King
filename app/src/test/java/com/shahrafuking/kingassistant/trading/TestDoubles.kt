@@ -29,7 +29,7 @@ class InMemoryBudgetController(startBalance: Double) : TradingService.BudgetCont
         while (true) {
             val cur = balance.get()
             val updated = cur + amount
-            if (balance.compareAndSet(cur, updated)) return return
+            if (balance.compareAndSet(cur, updated)) return
         }
     }
 
