@@ -5,14 +5,27 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 class TradeSimulatorTest {
+    private lateinit var simulator: TradeSimulator
+
+    @Before
+    fun setup() {
+        simulator = TradeSimulator()
+    }
+
+    @After
+    fun tearDown() = runBlocking {
+        simulator.shutdown()
+    }
+
     @Test
     fun submitOrder_emitsFilled() = runBlocking {
-        val simulator = TradeSimulator()
         val order = Order(symbol = "TEST", side = Side.BUY, amount = 1.0)
         simulator.submitOrder(order)
         // wait for a fill event within a reasonable timeout
@@ -24,7 +37,6 @@ class TradeSimulatorTest {
 
     @Test
     fun cancelOrder_emitsCancelled() = runBlocking {
-        val simulator = TradeSimulator()
         val order = Order(symbol = "TEST2", side = Side.SELL, amount = 2.5)
         simulator.submitOrder(order)
         // cancel immediately
