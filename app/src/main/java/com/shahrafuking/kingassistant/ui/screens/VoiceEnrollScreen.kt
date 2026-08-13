@@ -9,16 +9,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 /**
- * VoiceEnrollScreen
- * - Simple UI to record N samples and enroll a voice profile.
- * - Uses VoiceEnrollmentManager (suspend functions). This is a scaffold UI.
+ * VoiceEnrollScreen - simple UI to record N samples and enroll a voice profile.
  */
 @Composable
 fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     var ownerName by remember { mutableStateOf("") }
     var isRecording by remember { mutableStateOf(false) }
     var samples by remember { mutableStateOf(listOf<String>()) }
@@ -36,7 +36,6 @@ fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
                 status = "রেকর্ডিং শুরু..."
                 scope.launch {
                     try {
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         val mgr = com.shahrafuking.kingassistant.security.VoiceEnrollmentManager(ctx.applicationContext)
                         val path = mgr.recordSample("enroll_${samples.size + 1}", durationMs = 2000)
                         samples = samples + path
@@ -56,7 +55,6 @@ fun VoiceEnrollScreen(onEnrollComplete: (String) -> Unit) {
                 status = "এনরোল করা হচ্ছে..."
                 scope.launch {
                     try {
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         val mgr = com.shahrafuking.kingassistant.security.VoiceEnrollmentManager(ctx.applicationContext)
                         val profileId = mgr.enrollProfile(ownerName, samples)
                         status = "এনরোল সম্পন্ন: $profileId"
