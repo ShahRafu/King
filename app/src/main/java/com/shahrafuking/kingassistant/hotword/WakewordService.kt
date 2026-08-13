@@ -1,4 +1,3 @@
-name=app/src/main/java/com/shahrafuking/kingassistant/hotword/WakewordService.kt url=https://github.com/ShahRafu/King/blob/main/app/src/main/java/com/shahrafuking/kingassistant/hotword/WakewordService.kt
 package com.shahrafuking.kingassistant.hotword
 
 import android.app.Notification
