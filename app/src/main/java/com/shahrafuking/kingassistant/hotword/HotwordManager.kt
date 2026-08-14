@@ -33,26 +33,46 @@ class HotwordManager(private val context: Context) {
             return
         }
 
-        // Simple RMS-based listener as placeholder
+        // If there's already a job running, don't start another
+        if (audioJob?.isActive == true) return
+
         audioJob = scope.launch {
+            var recorder: AudioRecord? = null
             try {
                 val sampleRate = 16000
                 val channel = AudioFormat.CHANNEL_IN_MONO
                 val format = AudioFormat.ENCODING_PCM_16BIT
                 val minBuf = AudioRecord.getMinBufferSize(sampleRate, channel, format)
+                if (minBuf == AudioRecord.ERROR || minBuf == AudioRecord.ERROR_BAD_VALUE) {
+                    Log.w(TAG, "AudioRecord.getMinBufferSize returned error: $minBuf")
+                    return@launch
+                }
+                // ensure bufferSize reasonable
                 val bufferSize = maxOf(minBuf, sampleRate / 4)
-                val recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channel, format, bufferSize)
+
+                recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channel, format, bufferSize)
+                if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                    Log.w(TAG, "AudioRecord not initialized (state=${recorder.state})")
+                    try { recorder.release() } catch (_: Throwable) {}
+                    return@launch
+                }
+
                 val shortBuf = ShortArray(bufferSize / 2)
+                // Start recording in a safe manner
                 recorder.startRecording()
+
                 while (isActive) {
-                    val r = recorder.read(shortBuf, 0, shortBuf.size)
+                    val r = try { recorder.read(shortBuf, 0, shortBuf.size) } catch (t: Throwable) {
+                        Log.w(TAG, "AudioRecord.read failed: ${t.localizedMessage}", t)
+                        break
+                    }
                     if (r > 0) {
                         var sum = 0L
                         for (i in 0 until r) {
                             val v = shortBuf[i].toInt()
                             sum += (v * v).toLong()
                         }
-                        val rms = Math.sqrt(sum.toDouble() / r.toDouble())
+                        val rms = kotlin.math.sqrt(sum.toDouble() / r.toDouble())
                         // threshold tuned for quick test; adjust as needed
                         if (rms > 1500.0) {
                             withContext(Dispatchers.Main) { onHotword(true) }
@@ -63,10 +83,15 @@ class HotwordManager(private val context: Context) {
                         delay(10)
                     }
                 }
-                recorder.stop()
-                recorder.release()
             } catch (t: Throwable) {
                 Log.w(TAG, "Hotword listener failed: ${t.localizedMessage}", t)
+            } finally {
+                try {
+                    recorder?.let {
+                        try { it.stop() } catch (_: Throwable) {}
+                        try { it.release() } catch (_: Throwable) {}
+                    }
+                } catch (_: Throwable) {}
             }
         }
     }
