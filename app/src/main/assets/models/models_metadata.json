@@ -1,0 +1,39 @@
+{
+  "av_sync.tflite": {
+    "description": "Audio-visual synchronization model",
+    "filename": "av_sync.tflite",
+    "input_shape": [1, 64, 64],
+    "sample_rate": 48000,
+    "preprocessing": {
+      "type": "log_mel",
+      "n_mels": 64,
+      "n_fft": 1024,
+      "hop_length": 512,
+      "normalize": "log+mean_std"
+    },
+    "checksum": "" 
+  },
+  "speaker_embedder.tflite": {
+    "description": "Speaker embedding model",
+    "filename": "speaker_embedder.tflite",
+    "input_shape": [1, 48000],
+    "sample_rate": 48000,
+    "preprocessing": {
+      "type": "raw_waveform",
+      "normalize": "[-1,1]",
+      "frame_length_ms": 16000
+    },
+    "checksum": ""
+  },
+  "voice_antispoof.tflite": {
+    "description": "Voice anti-spoof / liveness model",
+    "filename": "voice_antispoof.tflite",
+    "input_shape": [1, 48000],
+    "sample_rate": 48000,
+    "preprocessing": {
+      "type": "raw_waveform_or_logmels",
+      "normalize": "[-1,1]"
+    },
+    "checksum": ""
+  }
+}
