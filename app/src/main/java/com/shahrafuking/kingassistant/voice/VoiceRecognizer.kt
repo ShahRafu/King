@@ -1,6 +1,7 @@
 package com.shahrafuking.kingassistant.voice
 
 import android.content.Context
+import android.content.Intent
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -47,8 +48,7 @@ class VoiceRecognizer(private val context: Context) {
             }
             sr.setRecognitionListener(listener)
 
-            val intent = RecognizerIntent().apply {
-                action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
