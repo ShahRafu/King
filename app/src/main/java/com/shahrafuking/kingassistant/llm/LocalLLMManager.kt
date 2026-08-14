@@ -1,7 +1,6 @@
 package com.shahrafuking.kingassistant.llm
 
 import android.app.Activity
-import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,8 +33,15 @@ class LocalLLMManager(private val activity: Activity) {
     private val gatekeeper = com.shahrafuking.kingassistant.selfheal.VoiceAuthGatekeeper(activity)
 
     suspend fun loadModel(path: String): Boolean = withContext(Dispatchers.IO) {
-        // ensure model path is under allowed directories (owner-controlled)
-        nativeLoadModel(path)
+        return@withContext try {
+            nativeLoadModel(path)
+        } catch (u: UnsatisfiedLinkError) {
+            Log.w(TAG, "Native llmbridge not loaded; cannot load model", u)
+            false
+        } catch (t: Throwable) {
+            Log.w(TAG, "loadModel failed", t)
+            false
+        }
     }
 
     suspend fun generateCodeWithApproval(prompt: String, maxTokens: Int = 512): String? = withContext(Dispatchers.IO) {
@@ -47,9 +53,22 @@ class LocalLLMManager(private val activity: Activity) {
             return@withContext null
         }
 
-        // Call native generate
-        val result = nativeGenerate(prompt, maxTokens)
-        return@withContext result
+        return@withContext try {
+            // If native bridge not available, catch UnsatisfiedLinkError and return a deterministic mock
+            val nativeResult = try {
+                nativeGenerate(prompt, maxTokens)
+            } catch (u: UnsatisfiedLinkError) {
+                Log.w(TAG, "Native LLM bridge not available; returning mock response", u)
+                null
+            } catch (t: Throwable) {
+                Log.w(TAG, "Native generate failed", t)
+                null
+            }
+            nativeResult ?: "[LOCAL_LLM_MOCK] Native LLM not available. Provide a model and enable native bridge to get real outputs."
+        } catch (t: Throwable) {
+            Log.w(TAG, "generateCodeWithApproval failed", t)
+            null
+        }
     }
 
     fun unload() {
