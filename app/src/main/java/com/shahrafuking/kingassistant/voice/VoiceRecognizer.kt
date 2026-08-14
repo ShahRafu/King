@@ -61,8 +61,9 @@ class VoiceRecognizer(private val context: Context) {
     fun stopListening() {
         try {
             recognizer?.apply {
-                cancel()
-                destroy()
+                try { setRecognitionListener(null) } catch (_: Throwable) {}
+                try { cancel() } catch (_: Throwable) {}
+                try { destroy() } catch (_: Throwable) {}
             }
         } catch (t: Throwable) {
             Log.w(tag, "stopListening failed: ${t.localizedMessage}")
