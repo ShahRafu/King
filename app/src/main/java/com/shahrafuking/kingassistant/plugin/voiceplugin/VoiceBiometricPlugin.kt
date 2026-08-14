@@ -44,14 +44,25 @@ class TfliteSpeakerEmbedder(private val context: Context, private val modelAsset
             // Use reflection so build does not require tflite on classpath at compile time
             val interpClass = Class.forName("org.tensorflow.lite.Interpreter")
             val assetManager = context.assets
-            val fd = assetManager.openFd(modelAssetPath)
+            val fd = try { assetManager.openFd(modelAssetPath) } catch (e: Exception) {
+                Log.w(TAG, "TFLite model asset not found: $modelAssetPath")
+                return@withContext false
+            }
             val fis = fd.createInputStream()
-            val bytes = fis.readBytes()
-            fis.close()
+            val bytes = try { fis.readBytes() } catch (e: Exception) {
+                Log.w(TAG, "Failed to read TFLite model asset: ${e.message}")
+                try { fis.close() } catch (_: Throwable) {}
+                try { fd.close() } catch (_: Throwable) {}
+                return@withContext false
+            } finally {
+                try { fis.close() } catch (_: Throwable) {}
+                try { fd.close() } catch (_: Throwable) {}
+            }
 
             // Construct ByteBuffer for model — use Interpreter(byteBuffer) if available
-            val bbClass = java.nio.ByteBuffer::class.java
-            val byteBuffer = java.nio.ByteBuffer.allocateDirect(bytes.size).apply { put(bytes); rewind() }
+            val byteBuffer = java.nio.ByteBuffer.allocateDirect(bytes.size).order(java.nio.ByteOrder.nativeOrder())
+            byteBuffer.put(bytes)
+            byteBuffer.rewind()
 
             // Try to find a constructor that accepts ByteBuffer
             val ctor = interpClass.getConstructor(java.nio.ByteBuffer::class.java)

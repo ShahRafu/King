@@ -28,8 +28,11 @@ class ApiClientOpenAI(
     private val TAG = "ApiClientOpenAI"
 
     suspend fun chat(systemPrompt: String? = null, userPrompt: String): String = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.API_KEY
-        if (apiKey.isBlank()) throw IllegalStateException("API key not set. Add API_KEY to local.properties or GitHub Secrets.")
+        val apiKey = try { BuildConfig.API_KEY } catch (_: Throwable) { "" }
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "OpenAI API key not set. Returning demo fallback from ApiClientOpenAI.chat()")
+            return@withContext "[DEMO_FALLBACK] OpenAI API key not configured. Configure API_KEY via local.properties or CI secrets."
+        }
 
         val messages = JSONArray()
         systemPrompt?.let {
@@ -52,21 +55,26 @@ class ApiClientOpenAI(
             .addHeader("Accept", "application/json")
             .build()
 
-        client.newCall(req).execute().use { res ->
-            val code = res.code
-            val respBody = res.body?.string()
-            if (!res.isSuccessful) {
-                Log.e(TAG, "OpenAI error ($code): $respBody")
-                throw IOException("OpenAI error: $code - ${res.message}")
+        try {
+            client.newCall(req).execute().use { res ->
+                val code = res.code
+                val respBody = res.body?.string()
+                if (!res.isSuccessful) {
+                    Log.e(TAG, "OpenAI error ($code): $respBody")
+                    return@withContext "[ERROR] OpenAI error: $code"
+                }
+                if (respBody == null) return@withContext "[ERROR] Empty response body from OpenAI"
+                val j = JSONObject(respBody)
+                val choices = j.optJSONArray("choices") ?: JSONArray()
+                if (choices.length() == 0) {
+                    return@withContext j.toString()
+                }
+                val msg = choices.getJSONObject(0).optJSONObject("message") ?: JSONObject()
+                return@withContext msg.optString("content", j.toString())
             }
-            if (respBody == null) throw IOException("Empty response body")
-            val j = JSONObject(respBody)
-            val choices = j.optJSONArray("choices") ?: JSONArray()
-            if (choices.length() == 0) {
-                return@withContext j.toString()
-            }
-            val msg = choices.getJSONObject(0).optJSONObject("message") ?: JSONObject()
-            return@withContext msg.optString("content", j.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "OpenAI request failed: ${e.message}", e)
+            return@withContext "[ERROR] OpenAI request failed: ${e.message}"
         }
     }
 }
