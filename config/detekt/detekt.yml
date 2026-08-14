@@ -1,0 +1,19 @@
+# Minimal detekt config - buildUponDefaultConfig is enabled in Gradle.
+# Tweak rules as your project needs.
+build:
+  maxIssues: 0
+
+processors:
+  active: true
+
+console-reports:
+  active: true
+
+rules:
+  comments:
+    // keep doc rules relaxed for now
+    UndocumentedPublicClass:
+      active: false
+  complexity:
+    TooManyFunctions:
+      active: false
