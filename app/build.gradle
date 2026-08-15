@@ -15,33 +15,20 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-
-        // If your project contains native libs, ensure these ABIs are available.
+        vectorDrawables {
+            useSupportLibrary true
+        }
+        
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
-
-        // Enable MultiDex if your method count grows (TensorFlow Lite can push you over the limit).
         multiDexEnabled true
     }
 
-    signingConfigs {
-        // Default debug signing (Gradle will use the debug keystore)
-        debug {}
-    }
-
     buildTypes {
-        debug {
-            applicationIdSuffix ".debug"
-            debuggable true
-            minifyEnabled false
-            signingConfig signingConfigs.debug
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Configure signingConfig here for release if you add a keystore
-            // signingConfig signingConfigs.release
         }
     }
 
@@ -56,22 +43,19 @@ android {
 
     buildFeatures {
         compose true
-        buildConfig true
+        buildConfig = true
     }
 
     composeOptions {
-        // Keep this in sync with your Compose and Kotlin versions
         kotlinCompilerExtensionVersion '1.5.8'
     }
 
-    // Packaging: exclude license META-INF entries that commonly cause collisions
     packaging {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
     }
 
-    // ABI splits: produce per-ABI APKs and also a universal APK
     splits {
         abi {
             enable true
@@ -80,45 +64,32 @@ android {
             universalApk true
         }
     }
-
-    // Optional: reduce APK size by excluding unused languages / resources (add if needed)
-    // lintOptions, testOptions etc can be added here if required
 }
 
 dependencies {
-    // Core AndroidX
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
-
-    // Compose + Activity
     implementation 'androidx.activity:activity-compose:1.8.2'
-
-    // AppCompat & Material (requested)
+    
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
-    // Compose BOM + Compose libraries
     implementation platform('androidx.compose:compose-bom:2023.10.01')
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
 
-    // TensorFlow Lite (requested)
     implementation 'org.tensorflow:tensorflow-lite:2.14.0'
     implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
-
-    // MultiDex support
     implementation 'androidx.multidex:multidex:2.0.1'
 
-    // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     androidTestImplementation platform('androidx.compose:compose-bom:2023.10.01')
     androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
-
-    // Debug-only tooling
+    
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
