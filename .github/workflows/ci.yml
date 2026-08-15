@@ -36,6 +36,21 @@ jobs:
         run: |
           chmod +x scripts/autoagent/autoagent_local.sh || true
 
+      - name: Install Android SDK tools (cmdline-tools, ndk, cmake)
+        uses: android-actions/setup-android@v4
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          ndk: '25.2.9519653'
+          cmake: '3.22.1'
+
+      - name: Accept Android SDK licenses
+        run: |
+          set -e
+          if [ -n "$ANDROID_SDK_ROOT" ] && [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          fi
+
       - name: ktlint check
         run: ./gradlew ktlintCheck --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
