@@ -37,16 +37,16 @@ jobs:
           chmod +x scripts/autoagent/autoagent_local.sh || true
 
       - name: ktlint check
-        run: ./gradlew ktlintCheck --no-daemon
+        run: ./gradlew ktlintCheck --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
       - name: detekt
-        run: ./gradlew detekt --no-daemon
+        run: ./gradlew detekt --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
       - name: Run unit tests
-        run: ./gradlew test --no-daemon
+        run: ./gradlew test --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
       - name: Assemble Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
       - name: Upload APK artifact
         if: success()
