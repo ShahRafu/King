@@ -1,33 +1,20 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'kotlin-kapt'
-    id 'io.gitlab.arturbosch.detekt'
-    id 'org.jlleitschuh.gradle.ktlint'
 }
 
 android {
-    namespace 'com.shahrafuking.kingassistant'
+    namespace 'com.shahrafu.king' // আপনার প্রজেক্টের প্যাকেজ নাম অনুযায়ী এটি ঠিক থাকতে পারে
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.shahrafuking.kingassistant"
+        applicationId "com.shahrafu.king"
         minSdk 24
         targetSdk 34
         versionCode 1
-        versionName "0.1.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                cppFlags "-std=c++17 -O2"
-            }
-        }
+        versionName "1.0"
 
-        // Safety: Provide empty BuildConfig defaults so code referencing these fields compiles in demo mode.
-        // Real values should be supplied via local.properties or CI secrets (e.g., API_KEY, PORCUPINE_ACCESS_KEY).
-        buildConfigField "String", "PORCUPINE_KEYWORD_FILENAME", '""'
-        buildConfigField "String", "PORCUPINE_ACCESS_KEY", '""'
-        buildConfigField "String", "API_KEY", '""'
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -41,92 +28,23 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = '17'
     }
-
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
-        }
-    }
-
-    ndkVersion "25.2.9519653"
 
     buildFeatures {
-        compose true
+        buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.3'
-    }
-    packagingOptions {
-        resources {
-            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
-        }
-    }
-
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
-        }
-    }
-}
-
-// detekt configuration
-detekt {
-    toolVersion = "1.22.0"
-    config = files("$rootDir/config/detekt/detekt.yml")
-    buildUponDefaultConfig = true
-}
-
-ktlint {
-    verbose.set(true)
-    android.set(true)
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
-    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
-
-    implementation 'androidx.activity:activity-compose:1.8.0'
-    implementation 'androidx.compose.ui:ui:1.5.3'
-    implementation 'androidx.compose.material:material:1.5.1'
-    implementation 'androidx.compose.ui:ui-tooling-preview:1.5.3'
-    implementation "androidx.compose.material:material-icons-extended:1.5.3"
-
-    debugImplementation "androidx.compose.ui:ui-tooling:1.5.3"
-
-    // Room
-    implementation "androidx.room:room-runtime:2.6.1"
-    implementation "androidx.room:room-ktx:2.6.1"
-    kapt "androidx.room:room-compiler:2.6.1"
-
-    // SQLCipher (used by MemoryDatabase at runtime). Include for compilation so the SupportFactory class is available.
-    implementation "net.zetetic:android-database-sqlcipher:4.5.0"
-
-    // TensorFlow Lite for speaker embedder
-    implementation "org.tensorflow:tensorflow-lite:2.11.0"
-
-    // CameraX (for lip-sync capture)
-    implementation 'androidx.camera:camera-core:1.2.3'
-    implementation 'androidx.camera:camera-camera2:1.2.3'
-    implementation 'androidx.camera:camera-lifecycle:1.2.3'
-    implementation 'androidx.camera:camera-view:1.0.0-alpha32'
-
-    // ML Kit Face Detection for landmarking (used in lip-sync)
-    implementation 'com.google.mlkit:face-detection:16.1.5'
-
-    // Duktape for local JS plugin sandbox (no network/file access exposed)
-    implementation 'com.squareup.duktape:duktape-android:1.3.0'
-
-    // Encrypted SharedPreferences for PIN storage
-    implementation 'androidx.security:security-crypto:1.0.0'
-
-    // Unit test dependencies (Robolectric + AndroidX test-core for ApplicationProvider)
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'androidx.test:core:1.5.0'
-    testImplementation 'org.robolectric:robolectric:4.10.3'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
