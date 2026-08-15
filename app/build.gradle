@@ -45,16 +45,16 @@ android {
         jvmTarget = "17"
     }
 
-    // If you are not ready to build native libraries, you can comment out externalNativeBuild and ndkVersion lines.
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
-        }
-    }
+    // NOTE: Disabled externalNativeBuild and ndkVersion in CI to avoid CMake/NDK configuration-time failures.
+    // If you need native builds, re-enable these lines and ensure the runner has the matching NDK/CMake installed.
+    // externalNativeBuild {
+    //     cmake {
+    //         path "src/main/cpp/CMakeLists.txt"
+    //         version "3.22.1"
+    //     }
+    // }
 
-    // Comment out ndkVersion if you don't intend to build native code in CI locally.
-    ndkVersion "25.2.9519653"
+    // ndkVersion "25.2.9519653"
 
     buildFeatures {
         compose true
