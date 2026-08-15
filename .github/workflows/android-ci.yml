@@ -30,6 +30,13 @@ jobs:
           api-level: 35
           build-tools: 35.0.0
 
+      - name: Accept Android SDK licenses
+        run: |
+          set -e
+          if [ -n "$ANDROID_SDK_ROOT" ] && [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          fi
+
       - name: Ensure gradlew is executable
         run: |
           if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
@@ -40,10 +47,10 @@ jobs:
           if [ -x ./gradlew ] && [ -f ./gradle/wrapper/gradle-wrapper.jar ] && [ "$(stat -c%s ./gradle/wrapper/gradle-wrapper.jar)" -gt 1024 ]; then
             echo "Using project Gradle wrapper"
             # Build debug APK to ensure project compiles for Android variants
-            ./gradlew assembleDebug --no-daemon --stacktrace --warning-mode=all
+            ./gradlew assembleDebug --no-daemon -PbuildFlowServiceProperty=false --stacktrace --warning-mode=all
 
             # Run unit tests (JVM tests). Use --info for more logs when failing.
-            ./gradlew test --no-daemon --stacktrace --info --warning-mode=all
+            ./gradlew test --no-daemon -PbuildFlowServiceProperty=false --stacktrace --info --warning-mode=all
           else
             echo "ERROR: gradlew or gradle/wrapper/gradle-wrapper.jar is missing or invalid. Commit the project Gradle wrapper (gradlew + gradle/wrapper/gradle-wrapper.jar) to the repo and re-run."
             exit 1
