@@ -53,8 +53,23 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
+      - name: Install Android SDK (platform tools + build-tools)
+        uses: android-actions/setup-android@v4
+        with:
+          api-level: 35
+          build-tools: 35.0.0
+
+      - name: Accept Android SDK licenses
+        run: |
+          set -e
+          if [ -n "$ANDROID_SDK_ROOT" ] && [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          fi
+
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          # pass buildFlowServiceProperty explicitly so Gradle config-time doesn't fail
+          ./gradlew assembleDebug --no-daemon -PbuildFlowServiceProperty=false --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
