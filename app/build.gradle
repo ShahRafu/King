@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.shahrafu.king' // আপনার প্রজেক্টের প্যাকেজ নাম অনুযায়ী এটি ঠিক থাকতে পারে
+    namespace 'com.shahrafuking.kingassistant'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.shahrafu.king"
+        applicationId "com.shahrafuking.kingassistant"
         minSdk 24
         targetSdk 34
         versionCode 1
