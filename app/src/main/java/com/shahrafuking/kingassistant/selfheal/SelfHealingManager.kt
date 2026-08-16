@@ -25,7 +25,7 @@ class SelfHealingManager(private val activity: Context) {
     private val gatekeeper = VoiceAuthGatekeeper(activity as android.app.Activity)
     private val executor = LocalCodeExecutor()
 
-    suspend fun reportError(errorText: String) = withContext(Dispatchers.IO) {
+    suspend fun reportError(errorText: String): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "reportError called")
         val candidate = isolator.identifyFileForError(errorText)
         if (candidate == null) {
@@ -58,13 +58,13 @@ class SelfHealingManager(private val activity: Context) {
         val stagedPath = isolator.stageFileContents(java.io.File(candidate).name, proposed)
         Log.i(TAG, "staged change at $stagedPath")
 
-        // Optionally run small JS validators/plugins on the proposed text (example usage)
+        // Optionally ran small JS validators/plugins on the proposed text (example usage)
         val validationScript = """
-            // The plugin receives `content` string and must return true for pass
-            (function(content){
-                // simple heuristic: ensure no network strings
-                return (!/fetch\(|require\(|net\.|http:|https:/i.test(content));
-            })(content)
+        // The plugin receives 'content' string and must return true for pass
+        (function(content){
+            // simple heuristic: ensure no network strings
+            return (!/fetch|require|(net\.)|(http)/.test(content));
+        })(content)
         """
         val ok = executor.runValidator(validationScript, mapOf("content" to proposed))
         if (!ok) {
@@ -81,8 +81,10 @@ class SelfHealingManager(private val activity: Context) {
 
     private fun generateConservativePatch(existing: String, errorText: String): String {
         // Placeholder strategy: append a TODO + comment with the error near the top of the file.
-        val header = "/* SELF-HEAL PROPOSAL: ${System.currentTimeMillis()} */\n/* Error: ${errorText.replace("*/","")}
- */\n"
+        val timestamp = System.currentTimeMillis()
+        val cleanError = errorText.replace("/", "")
+        val header = "/* SELF-HEAL PROPOSAL: $timestamp */\n/* Error: $cleanError */\n\n"
+        
         return header + existing
     }
 }
