@@ -8,15 +8,16 @@ import androidx.room.Query
 @Dao
 interface MemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(memory: MemoryEntity): Long
+    fun insert(memory: MemoryEntity): Long
 
-    // MemoryEntity defines `timestamp`, and MemoryRepository expects a suspend List.
+    // MemoryEntity uses `timestamp`; repository expects a List.
     @Query("SELECT * FROM memories ORDER BY timestamp DESC")
-    suspend fun getAll(): List<MemoryEntity>
+    fun getAll(): List<MemoryEntity>
 
     @Query("SELECT * FROM memories WHERE id = :id")
-    suspend fun getById(id: Long): MemoryEntity?
+    fun getById(id: Long): MemoryEntity?
 
+    // Return number of rows deleted
     @Query("DELETE FROM memories WHERE id = :id")
-    suspend fun deleteById(id: Long): Int
+    fun deleteById(id: Long): Int
 }
