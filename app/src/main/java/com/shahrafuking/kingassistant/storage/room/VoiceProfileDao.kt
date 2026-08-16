@@ -10,6 +10,7 @@ interface VoiceProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(profile: VoiceProfileEntity)
 
+    // VoiceProfileEntity uses `profileId` (String) as the primary key.
     @Query("SELECT * FROM voice_profiles WHERE profileId = :id LIMIT 1")
     suspend fun findById(id: String): VoiceProfileEntity?
 }
