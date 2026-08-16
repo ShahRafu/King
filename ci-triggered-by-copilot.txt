@@ -1,0 +1,4 @@
+CI trigger file created by GitHub Copilot to start the build workflow.
+Timestamp: 2026-08-16T11:12:00Z
+
+This file is safe to delete.
