@@ -8,8 +8,8 @@ import androidx.room.Query
 @Dao
 interface VoiceProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(profile: VoiceProfileEntity)
+    fun insert(profile: VoiceProfileEntity): Long
 
     @Query("SELECT * FROM voice_profiles WHERE profileId = :id LIMIT 1")
-    suspend fun findById(id: String): VoiceProfileEntity?
+    fun findById(id: String): VoiceProfileEntity?
 }
