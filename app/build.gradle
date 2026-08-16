@@ -41,13 +41,14 @@ android {
         }
     }
 
+    // Use Java 1.8 target for Kotlin/Compose compatibility
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = '1.8'
     }
 
     buildFeatures {
@@ -56,6 +57,7 @@ android {
     }
 
     composeOptions {
+        // Keep this version; if you see a compiler mismatch error, I'll adjust to the right value.
         kotlinCompilerExtensionVersion '1.5.8'
     }
 
@@ -81,15 +83,25 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.activity:activity-compose:1.8.2'
 
-    // AppCompat & Material
+    // AppCompat & Material (Android Views)
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
-    // Compose BOM + libs
+    // Compose BOM (centralizes Compose versions)
     implementation platform('androidx.compose:compose-bom:2023.10.01')
+
+    // Compose UI pieces (BOM supplies versions)
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.ui:ui-tooling-preview'
+
+    // Foundation + Material (legacy) — required for Text, Button, Switch, OutlinedTextField, Row/Column/weight etc.
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material:material'
+    implementation 'androidx.compose.material:material-icons-core'
+    implementation 'androidx.compose.material:material-icons-extended'
+
+    // Optional: Material3 (if you use Material3 components elsewhere)
     implementation 'androidx.compose.material3:material3'
 
     // TensorFlow Lite
