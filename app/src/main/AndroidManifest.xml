@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.shahrafuking.kingassistant">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -8,15 +7,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
 
     <application
         android:allowBackup="true"
         android:label="King Assistant"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true">
 
-        <!-- MainActivity (entrypoint) -->
+        <!-- Main launcher activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -26,17 +27,19 @@
             </intent-filter>
         </activity>
 
-        <!-- Enrollment & Verification UIs -->
+        <!-- Enrollment & verification activities (non-exported) -->
         <activity android:name=".ui.EnrollmentActivity" android:exported="false" />
         <activity android:name=".ui.VerificationActivity" android:exported="false" />
+        <activity android:name=".ui.LLMTestActivity" android:exported="false" />
+        <activity android:name=".ui.HighSecurityApprovalActivity" android:exported="false" />
 
-        <!-- OverlayService: foreground service with microphone usage -->
+        <!-- Overlay service (foreground service for microphone/assistant UI) -->
         <service
             android:name=".overlay.OverlayService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Accessibility AutoClickService (disabled by default) -->
+        <!-- Accessibility auto-click service (requires explicit user enable) -->
         <service
             android:name=".accessibility.AutoClickService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -49,15 +52,6 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- LLM Test / Model Management UI (for on-device mock testing) -->
-        <activity
-            android:name=".ui.LLMTestActivity"
-            android:exported="false" />
-
-        <!-- High Security Approval UI -->
-        <activity
-            android:name=".ui.HighSecurityApprovalActivity"
-            android:exported="false" />
-
     </application>
+
 </manifest>
