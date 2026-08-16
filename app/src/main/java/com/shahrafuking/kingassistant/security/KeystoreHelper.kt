@@ -2,9 +2,7 @@ package com.shahrafuking.kingassistant.security
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Build
 import android.util.Base64
-import androidx.annotation.RequiresApi
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -12,19 +10,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * KeystoreHelper: Provides simple APIs to create a symmetric AES key in AndroidKeyStore,
- * encrypt a string and store it in SharedPreferences, and decrypt it back.
- *
- * Stored value format (base64): IV (12 bytes) || ciphertext
- *
- * Usage:
- *  - KeystoreHelper.encryptAndStoreString(context, keyName, plaintext)
- *  - KeystoreHelper.decryptString(context, keyName) : String?
- *
- * Note: This implementation targets API >= 24 (minSdk in project is 24). AES/GCM with
- * AndroidKeyStore is supported from API 23+.
- */
 object KeystoreHelper {
     private const val ANDROID_KEY_STORE = "AndroidKeyStore"
     private const val PREFS_NAME = "king_keystore_prefs"
@@ -56,6 +41,10 @@ object KeystoreHelper {
         return keyGenerator.generateKey()
     }
 
+    /**
+     * Primary encrypt/store API used by EnrollmentActivity and other code.
+     * Stores base64(iv||ciphertext) under the provided alias in SharedPreferences.
+     */
     fun encryptAndStoreString(context: Context, keyAlias: String, plaintext: String) {
         val key = getOrCreateKey(keyAlias)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -69,6 +58,19 @@ object KeystoreHelper {
         System.arraycopy(ciphertext, 0, out, iv.size, ciphertext.size)
         val b64 = Base64.encodeToString(out, Base64.NO_WRAP)
         prefs(context).edit().putString(keyAlias, b64).apply()
+    }
+
+    /**
+     * Backwards-compatible wrapper expected by older callers/tests
+     * Returns true on success, false on failure.
+     */
+    fun encryptString(context: Context, plaintext: String, keyAlias: String): Boolean {
+        return try {
+            encryptAndStoreString(context, keyAlias, plaintext)
+            true
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     fun decryptString(context: Context, keyAlias: String): String? {
@@ -92,5 +94,17 @@ object KeystoreHelper {
 
     fun clearStoredValue(context: Context, keyAlias: String) {
         prefs(context).edit().remove(keyAlias).apply()
+    }
+
+    /**
+     * Backwards-compatible clear API
+     */
+    fun clear(context: Context, keyAlias: String): Boolean {
+        return try {
+            clearStoredValue(context, keyAlias)
+            true
+        } catch (_: Throwable) {
+            false
+        }
     }
 }
