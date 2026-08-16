@@ -22,19 +22,19 @@ data class MemoryEntry(
 @Dao
 interface MemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(entry: MemoryEntry): Long
+    fun insert(entry: MemoryEntry): Long
 
     @Query("SELECT * FROM memory_entries WHERE id = :id")
-    suspend fun getById(id: Long): MemoryEntry?
+    fun getById(id: Long): MemoryEntry?
 
     @Query("SELECT * FROM memory_entries ORDER BY timestamp DESC")
-    suspend fun getAll(): List<MemoryEntry>
+    fun getAll(): List<MemoryEntry>
 
     @Query("DELETE FROM memory_entries WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    fun deleteById(id: Long): Int
 
     @Query("DELETE FROM memory_entries")
-    suspend fun clearAll()
+    fun clearAll(): Int
 }
 
 @Database(entities = [MemoryEntry::class], version = 1, exportSchema = false)
