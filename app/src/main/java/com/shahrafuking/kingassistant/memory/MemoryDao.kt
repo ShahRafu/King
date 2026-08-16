@@ -1,9 +1,9 @@
-// DEPRECATED: consolidated to com.shahrafuking.kingassistant.storage.room.MemoryEntity / MemoryDao
-//
-// This file previously contained a duplicate Room Entity/DAO definition which conflicted
-// with storage.room versions. The database implementation now uses classes in
-// com.shahrafuking.kingassistant.storage.room. Keep this placeholder only temporarily
-// while migrating references. Remove this file once all callers use the storage.room types.
+// Removed duplicate Room Entity/DAO definitions.
+// This file used to define MemoryEntity and MemoryDao in the old `memory` package.
+// Those types have been consolidated under `com.shahrafuking.kingassistant.storage.room`.
+// This placeholder file no longer contains Room annotations so there are no duplicate
+// entities/DAOs during Room annotation processing. Delete this file when all callers
+// have migrated to the storage.room package.
 
-@Deprecated("Use com.shahrafuking.kingassistant.storage.room.MemoryEntity and storage.room.MemoryDao instead")
-class DeprecatedMemoryDaoPlaceholder
+@Deprecated("Memory types have been moved to com.shahrafuking.kingassistant.storage.room")
+class MemoryPackageMigrationPlaceholder
