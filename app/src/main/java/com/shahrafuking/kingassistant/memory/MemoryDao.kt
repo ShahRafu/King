@@ -1,27 +1,9 @@
-package com.shahrafuking.kingassistant.memory
+// DEPRECATED: consolidated to com.shahrafuking.kingassistant.storage.room.MemoryEntity / MemoryDao
+//
+// This file previously contained a duplicate Room Entity/DAO definition which conflicted
+// with storage.room versions. The database implementation now uses classes in
+// com.shahrafuking.kingassistant.storage.room. Keep this placeholder only temporarily
+// while migrating references. Remove this file once all callers use the storage.room types.
 
-import androidx.room.*
-
-@Entity(tableName = "memories")
-data class MemoryEntity(
-    @PrimaryKey val id: String,
-    val title: String,
-    val text: String,
-    val embeddingCsv: String?, // nullable comma-separated embedding
-    val createdAt: Long
-)
-
-@Dao
-interface MemoryDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(entity: MemoryEntity)
-
-    @Query("SELECT * FROM memories WHERE id = :id")
-    suspend fun getById(id: String): MemoryEntity?
-
-    @Query("SELECT * FROM memories ORDER BY createdAt DESC LIMIT :limit")
-    suspend fun listRecent(limit: Int): List<MemoryEntity>
-
-    @Query("DELETE FROM memories WHERE id = :id")
-    suspend fun deleteById(id: String)
-}
+@Deprecated("Use com.shahrafuking.kingassistant.storage.room.MemoryEntity and storage.room.MemoryDao instead")
+class DeprecatedMemoryDaoPlaceholder
