@@ -1,7 +1,6 @@
 package com.shahrafuking.kingassistant.capture
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.graphics.ImageFormat
 import android.media.Image
 import android.os.Handler
@@ -12,6 +11,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executors
@@ -24,16 +24,16 @@ import kotlin.coroutines.resumeWithException
  * Helper that binds CameraX ImageAnalysis to collect a sequence of InputImage frames for a
  * given duration (in milliseconds). It returns a List<InputImage> captured from the front camera.
  *
- * Note: caller must provide an Activity instance to bind to its lifecycle.
+ * Note: caller must provide a LifecycleOwner (e.g., an Activity that implements LifecycleOwner).
  */
-class CameraXImageCollector(private val activity: Activity, private val durationMs: Long = 3000L) {
+class CameraXImageCollector(private val lifecycleOwner: LifecycleOwner, private val durationMs: Long = 3000L) {
     private val TAG = "CameraXImageCollector"
     private val cameraExecutor = Executors.newSingleThreadExecutor()
 
     @SuppressLint("UnsafeOptInUsageError")
     suspend fun collectFrames(): List<InputImage> = suspendCancellableCoroutine { cont ->
         try {
-            val providerFuture = ProcessCameraProvider.getInstance(activity)
+            val providerFuture = ProcessCameraProvider.getInstance((lifecycleOwner as android.content.Context))
             providerFuture.addListener({
                 try {
                     val cameraProvider = providerFuture.get()
@@ -65,7 +65,8 @@ class CameraXImageCollector(private val activity: Activity, private val duration
                         .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
                         .build()
 
-                    cameraProvider.bindToLifecycle(activity, cameraSelector, imageAnalysis)
+                    // bindToLifecycle requires a LifecycleOwner (we accept lifecycleOwner in ctor)
+                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, imageAnalysis)
 
                     // Schedule stop after durationMs on main looper
                     Handler(Looper.getMainLooper()).postDelayed({
@@ -85,7 +86,7 @@ class CameraXImageCollector(private val activity: Activity, private val duration
                 } catch (e: Exception) {
                     cont.resumeWithException(e)
                 }
-            }, ContextCompat.getMainExecutor(activity))
+            }, ContextCompat.getMainExecutor(lifecycleOwner as android.content.Context))
         } catch (e: Exception) {
             cont.resumeWithException(e)
         }
