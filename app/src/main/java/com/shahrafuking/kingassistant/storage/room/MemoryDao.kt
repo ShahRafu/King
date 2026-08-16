@@ -10,15 +10,13 @@ interface MemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(memory: MemoryEntity): Long
 
-    // MemoryEntity defines `timestamp`, so order by that column.
-    // MemoryRepository expects a suspend List, so return a suspend List here.
+    // MemoryEntity defines `timestamp`, and MemoryRepository expects a suspend List.
     @Query("SELECT * FROM memories ORDER BY timestamp DESC")
     suspend fun getAll(): List<MemoryEntity>
 
     @Query("SELECT * FROM memories WHERE id = :id")
     suspend fun getById(id: Long): MemoryEntity?
 
-    // Return number of rows deleted (Int) to match callers that expect a status.
     @Query("DELETE FROM memories WHERE id = :id")
     suspend fun deleteById(id: Long): Int
 }
