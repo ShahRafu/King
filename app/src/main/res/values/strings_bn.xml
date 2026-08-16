@@ -1,4 +1,3 @@
 <resources>
-    <string name="app_name">King Assistant</string>
-    <string name="accessibility_service_description">King Assistant Voice and Accessibility Service</string>
+    <string name="king_assistant_bn_label">কিং অ্যাসিস্ট্যান্ট ভয়েস সার্ভিস</string>
 </resources>
