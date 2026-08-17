@@ -1,11 +1,12 @@
 package com.shahrafuking.kingassistant.ui.screens
 
+import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
@@ -62,7 +63,7 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
 fun SettingsToggleRow(title: String, subtitle: String, prefs: SharedPreferences, key: String) {
     var enabled by remember { mutableStateOf(prefs.getBoolean(key, false)) }
     Row(modifier = Modifier.padding(vertical = 8.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.fillMaxWidth(0.75f)) {
             Text(title)
             Text(subtitle, style = MaterialTheme.typography.caption)
         }
@@ -71,4 +72,15 @@ fun SettingsToggleRow(title: String, subtitle: String, prefs: SharedPreferences,
             prefs.edit().putBoolean(key, it).apply()
         }, colors = SwitchDefaults.colors())
     }
+}
+
+/**
+ * Convenience no-arg drawer used by MainActivity scaffold.
+ * It creates SharedPreferences and delegates to SettingsDrawerScreen.
+ */
+@Composable
+fun SettingsDrawer() {
+    val ctx = LocalContext.current
+    val prefs: SharedPreferences = ctx.getSharedPreferences("king_prefs", Context.MODE_PRIVATE)
+    SettingsDrawerScreen(prefs = prefs, onClose = { /* scaffold will handle closing */ })
 }
