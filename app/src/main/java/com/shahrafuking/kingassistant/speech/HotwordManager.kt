@@ -1,7 +1,7 @@
-// HotwordManager.kt
 package com.shahrafuking.kingassistant.speech
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -17,13 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * - Primary path: Porcupine adapter (if BuildConfig.PORCUPINE_ENABLED and adapter init succeeds)
  * - Fallback: Android SpeechRecognizer configured for Bangla (bn-BD) with partial results and simple phrase matching
- *
- * API:
- *   start(), stop(), setListener(listener)
- *
- * Notes:
- *  - Porcupine adapter is optional: provide HotwordPorcupineEngine implementation and add dependency to enable.
- *  - This class is lifecycle-friendly: multiple start/stop calls are safe.
  */
 class HotwordManager(private val context: Context) {
     private val TAG = "HotwordManager"
@@ -131,8 +124,7 @@ class HotwordManager(private val context: Context) {
         mainScope.launch {
             try {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-                val intent = RecognizerIntent().apply {
-                    action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-BD")
@@ -151,7 +143,7 @@ class HotwordManager(private val context: Context) {
                         if (listening.get()) {
                             // brief delay then restart listening
                             mainScope.launch {
-                                delay(600)
+                                kotlinx.coroutines.delay(600)
                                 if (listening.get()) restartSpeechRecognizer()
                             }
                         }
@@ -159,7 +151,7 @@ class HotwordManager(private val context: Context) {
                     override fun onResults(results: Bundle?) {
                         val texts = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
                         handleTextsForHotword(texts)
-                        if (listening.get()) mainScope.launch { delay(200); restartSpeechRecognizer() }
+                        if (listening.get()) mainScope.launch { kotlinx.coroutines.delay(200); restartSpeechRecognizer() }
                     }
                     override fun onPartialResults(partialResults: Bundle?) {
                         val texts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
