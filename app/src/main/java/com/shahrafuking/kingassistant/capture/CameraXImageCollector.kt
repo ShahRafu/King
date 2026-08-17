@@ -1,6 +1,7 @@
 package com.shahrafuking.kingassistant.capture
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.ImageFormat
 import android.media.Image
 import android.os.Handler
@@ -33,7 +34,8 @@ class CameraXImageCollector(private val lifecycleOwner: LifecycleOwner, private 
     @SuppressLint("UnsafeOptInUsageError")
     suspend fun collectFrames(): List<InputImage> = suspendCancellableCoroutine { cont ->
         try {
-            val providerFuture = ProcessCameraProvider.getInstance((lifecycleOwner as android.content.Context))
+            val context = lifecycleOwner as Context
+            val providerFuture = ProcessCameraProvider.getInstance(context)
             providerFuture.addListener({
                 try {
                     val cameraProvider = providerFuture.get()
@@ -65,7 +67,8 @@ class CameraXImageCollector(private val lifecycleOwner: LifecycleOwner, private 
                         .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
                         .build()
 
-                    // bindToLifecycle requires a LifecycleOwner (we accept lifecycleOwner in ctor)
+                    // bindToLifecycle requires a LifecycleOwner
+                    cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, imageAnalysis)
 
                     // Schedule stop after durationMs on main looper
@@ -86,7 +89,7 @@ class CameraXImageCollector(private val lifecycleOwner: LifecycleOwner, private 
                 } catch (e: Exception) {
                     cont.resumeWithException(e)
                 }
-            }, ContextCompat.getMainExecutor(lifecycleOwner as android.content.Context))
+            }, ContextCompat.getMainExecutor(context))
         } catch (e: Exception) {
             cont.resumeWithException(e)
         }
