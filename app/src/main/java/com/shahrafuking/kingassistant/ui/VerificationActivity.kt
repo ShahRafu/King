@@ -1,6 +1,7 @@
 package com.shahrafuking.kingassistant.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -126,8 +127,7 @@ class VerificationActivity : AppCompatActivity() {
         speechRecognizer?.destroy()
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
 
-        val intent = RecognizerIntent().apply {
-            action = RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true) // get early events
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
