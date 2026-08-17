@@ -117,6 +117,15 @@ dependencies {
     // WorkManager
     implementation 'androidx.work:work-runtime-ktx:2.8.1'
 
+    // TensorFlow Lite (for Interpreter usage across voice/vision models)
+    implementation 'org.tensorflow:tensorflow-lite:2.14.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+    // Optional: if your models use TF Select ops, uncomment:
+    // implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0'
+
+    // Coroutines (Android) — required for coroutine launch/delay
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
     // Room
     implementation 'androidx.room:room-runtime:2.5.2'
     implementation 'androidx.room:room-ktx:2.5.2'
