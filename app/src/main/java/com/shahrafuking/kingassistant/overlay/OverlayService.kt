@@ -17,10 +17,6 @@ import kotlinx.coroutines.*
 
 /**
  * Foreground service that listens to microphone via HotwordManager.
- * On hotword detection it launches VerificationActivity (or notifies user).
- *
- * This service is intentionally minimal and safe: it does not perform any auto-clicking
- * or network action by itself. It only demonstrates background hotword-listening lifecycle.
  */
 class OverlayService : Service() {
     companion object {
@@ -48,25 +44,24 @@ class OverlayService : Service() {
         val notif = buildNotification()
         startForeground(NOTIF_ID, notif)
 
-        hotwordManager.startListening { detected ->
-            // Callback on main thread
-            if (detected) {
+        // wire hotword manager using its listener API
+        hotwordManager.setListener(object : HotwordManager.HotwordListener {
+            override fun onHotwordDetected() {
                 Log.i(TAG, "Hotword detected")
-                // Bring verification or main UI to front (safe action)
-                val i = Intent(this, MainActivity::class.java).apply {
+                val i = Intent(this@OverlayService, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
                 startActivity(i)
-                // Optionally: post a notification or start VerificationActivity
             }
-        }
+        })
+        hotwordManager.start()
 
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        hotwordManager.stopListening()
+        hotwordManager.stop()
         scope.cancel()
     }
 
