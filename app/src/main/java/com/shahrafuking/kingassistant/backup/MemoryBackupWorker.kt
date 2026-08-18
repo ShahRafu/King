@@ -1,31 +1,28 @@
-package com.shahrafuking.kingassistant.backup
-
-import android.content.Context
-import android.util.Log
-import androidx.work.CoroutineWorker
-import androidx.work.WorkerParameters
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
-
-/**
- * MemoryBackupWorker - creates a simple timestamped backup file in app files/backups directory.
- * Replace with real zipping & cloud upload when backend is available.
- */
-class MemoryBackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result {
-        return try {
-            val ctx = applicationContext
-            val backups = File(ctx.filesDir, "backups")
-            if (!backups.exists()) backups.mkdirs()
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val out = File(backups, "memory_backup_$timestamp.txt")
-            out.writeText("Backup created at $timestamp\n(placeholder for memory dump)")
-            Log.i("MemoryBackupWorker", "backup created: ${out.absolutePath}")
-            Result.success()
-        } catch (e: Throwable) {
-            Log.e("MemoryBackupWorker", "backup failed", e)
-            Result.retry()
-        }
-    }
-}
+*** Begin Patch
+*** Update File: app/src/main/java/com/shahrafuking/kingassistant/backup/MemoryBackupWorker.kt
+@@
+-            Log.i("MemoryBackupWorker", "backup created: ${out.absolutePath}")
+-            Result.success()
++            Log.i("MemoryBackupWorker", "backup created: ${out.absolutePath}")
++
++            // Attempt to upload to configured GitHub repo if configured
++            try {
++                val prefs = ctx.getSharedPreferences("king_prefs", android.content.Context.MODE_PRIVATE)
++                val owner = prefs.getString("backup_remote_owner", null)
++                val repo = prefs.getString("backup_remote_repo", null)
++                val remotePathBase = prefs.getString("backup_remote_path", "backups") ?: "backups"
++                if (!owner.isNullOrBlank() && !repo.isNullOrBlank()) {
++                    val uploader = com.shahrafuking.kingassistant.net.GitHubUploader(ctx)
++                    val remotePath = "$remotePathBase/${out.name}"
++                    val ok = uploader.uploadFile(owner, repo, remotePath, out, "king: weekly backup ${out.name}")
++                    if (ok) Log.i("MemoryBackupWorker", "backup uploaded to $owner/$repo:$remotePath")
++                    else Log.e("MemoryBackupWorker", "backup upload failed for $owner/$repo:$remotePath")
++                } else {
++                    Log.i("MemoryBackupWorker", "no remote repo configured; skipping upload")
++                }
++            } catch (e: Throwable) {
++                Log.e("MemoryBackupWorker", "upload attempt failed", e)
++            }
++
++            Result.success()
+*** End Patch
