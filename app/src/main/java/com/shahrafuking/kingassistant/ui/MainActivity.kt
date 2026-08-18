@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.shahrafuking.kingassistant.core.RobotEngine
 import com.shahrafuking.kingassistant.security.VoiceAuthStub
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val robotEngine = RobotEngine(this)
@@ -34,22 +35,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 val authenticated = remember { mutableStateOf(false) }
+                val scaffoldState = rememberScaffoldState()
+                val scope = rememberCoroutineScope()
 
                 Scaffold(
+                    scaffoldState = scaffoldState,
                     topBar = { TopAppBar(title = { Text("King Assistant") }) },
                     drawerContent = { com.shahrafuking.kingassistant.ui.screens.SettingsDrawer() }
                 ) { padding ->
                     com.shahrafuking.kingassistant.ui.screens.HomeScreen(
                         authenticated = authenticated.value,
                         onStartAuth = {
-                            // start voice auth
-                            voiceAuth.startAuth { success ->
-                                authenticated.value = success
-                            }
+                            // start voice auth (temporarily stubbed to always succeed for testing)
+                            // You can replace this with real voiceAuth.startAuth later
+                            authenticated.value = true
+                            // kick off the real auth in background but ignore result for now
+                            try {
+                                voiceAuth.startAuth { success ->
+                                    // no-op: keep true for now
+                                }
+                            } catch (_: Throwable) {}
                         },
                         onSendText = { input ->
                             val response = robotEngine.processTextInput(input)
-                            // simple Toast-like response could be implemented; left as scaffold
+                            // Show immediate feedback so user sees some action
+                            android.widget.Toast.makeText(this@MainActivity, response, android.widget.Toast.LENGTH_LONG).show()
+                        },
+                        onOpenSettings = {
+                            scope.launch { scaffoldState.drawerState.open() }
                         }
                     )
                 }
