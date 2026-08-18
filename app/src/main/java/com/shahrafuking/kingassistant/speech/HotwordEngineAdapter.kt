@@ -92,10 +92,19 @@ class HotwordEngineAdapter private constructor(private val context: Context) : V
     }
 
     private fun isPorcupineEnabled(): Boolean {
+        // Try BuildConfig first (if the build provides PORCUPINE_ENABLED). If not present, fall back to package constant.
         return try {
-            BuildConfig.PORCUPINE_ENABLED
-        } catch (t: Throwable) {
-            Log.w("HotwordEngineAdapter", "BuildConfig.PORCUPINE_ENABLED not found, defaulting to false")
+            try {
+                com.shahrafuking.kingassistant.BuildConfig::class.java.getField("PORCUPINE_ENABLED").get(null) as? Boolean ?: false
+            } catch (_: Throwable) {
+                // fallback to top-level constant if present
+                try {
+                    PORCUPINE_ENABLED
+                } catch (_: Throwable) {
+                    false
+                }
+            }
+        } catch (_: Throwable) {
             false
         }
     }

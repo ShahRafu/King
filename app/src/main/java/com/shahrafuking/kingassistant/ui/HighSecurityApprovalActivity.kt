@@ -103,8 +103,8 @@ class HighSecurityApprovalActivity : ComponentActivity() {
                     audit.logIllumination(lux, "NONE_NEEDED")
                 }
 
-                // 5) Lip-sync verification (scaffold)
-                val lres = lipSync.verifyLipSync()
+                // 5) Lip-sync verification (pass activity)
+                val lres = lipSync.verifyLipSync(this@HighSecurityApprovalActivity)
                 if (!lres.success) {
                     resultView.text = "Approval denied: lip-sync failed"
                     Log.i(TAG, "lip-sync failed: ${lres.reason}")
@@ -149,7 +149,6 @@ class HighSecurityApprovalActivity : ComponentActivity() {
                 .setCancelable(false)
                 .show()
         }
-        // Wait for user selection (this is acceptable here because we are already on a coroutine/UI flow)
         latch.await()
         return approved
     }
