@@ -1,72 +1,62 @@
 package com.shahrafuking.kingassistant.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.*
 import androidx.compose.runtime.*
-import androidx.core.content.ContextCompat
-import com.shahrafuking.kingassistant.core.RobotEngine
-import com.shahrafuking.kingassistant.security.VoiceAuthStub
-import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import com.shahrafuking.kingassistant.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
-    private val robotEngine = RobotEngine(this)
-    private lateinit var voiceAuth: VoiceAuthStub
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        voiceAuth = VoiceAuthStub(this)
-
-        val requestPermissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted: Boolean ->
-            // handle permission result
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-
         setContent {
-            MaterialTheme {
-                val authenticated = remember { mutableStateOf(false) }
-                val scaffoldState = rememberScaffoldState()
-                val scope = rememberCoroutineScope()
+            val ctx = this
+            val prefs = ctx.getSharedPreferences("king_prefs", Context.MODE_PRIVATE)
+            val darkPref = remember { mutableStateOf(prefs.getBoolean("dark_theme", false)) }
 
-                Scaffold(
-                    scaffoldState = scaffoldState,
-                    topBar = { TopAppBar(title = { Text("King Assistant") }) },
-                    drawerContent = { com.shahrafuking.kingassistant.ui.screens.SettingsDrawer() }
-                ) { padding ->
-                    com.shahrafuking.kingassistant.ui.screens.HomeScreen(
-                        authenticated = authenticated.value,
-                        onStartAuth = {
-                            // start voice auth (temporarily stubbed to always succeed for testing)
-                            // You can replace this with real voiceAuth.startAuth later
-                            authenticated.value = true
-                            // kick off the real auth in background but ignore result for now
-                            try {
-                                voiceAuth.startAuth { success ->
-                                    // no-op: keep true for now
-                                }
-                            } catch (_: Throwable) {}
-                        },
-                        onSendText = { input ->
-                            val response = robotEngine.processTextInput(input)
-                            // Show immediate feedback so user sees some action
-                            android.widget.Toast.makeText(this@MainActivity, response, android.widget.Toast.LENGTH_LONG).show()
-                        },
-                        onOpenSettings = {
-                            scope.launch { scaffoldState.drawerState.open() }
-                        }
-                    )
+            AppTheme(darkTheme = darkPref.value) {
+                MaterialTheme {
+                    // reuse existing scaffold & home wiring from previous MainActivity UI file
+                    val authenticated = remember { mutableStateOf(false) }
+                    val scaffoldState = rememberScaffoldState()
+                    val scope = rememberCoroutineScope()
+
+                    Scaffold(
+                        scaffoldState = scaffoldState,
+                        topBar = { TopAppBar(title = { Text("King Assistant") }) },
+                        drawerContent = { com.shahrafuking.kingassistant.ui.screens.SettingsDrawer() }
+                    ) { padding ->
+                        com.shahrafuking.kingassistant.ui.screens.HomeScreen(
+                            authenticated = authenticated.value,
+                            onStartAuth = {
+                                authenticated.value = true
+                                try {
+                                    voiceAuth.startAuth { success -> }
+                                } catch (_: Throwable) {}
+                            },
+                            onSendText = { input ->
+                                val response = robotEngine.processTextInput(input)
+                                android.widget.Toast.makeText(this@MainActivity, response, android.widget.Toast.LENGTH_LONG).show()
+                            },
+                            onOpenSettings = {
+                                scope.launch { scaffoldState.drawerState.open() }
+                            }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewAppRoot() {
+    AppTheme {
+        Text("Preview King Assistant")
     }
 }

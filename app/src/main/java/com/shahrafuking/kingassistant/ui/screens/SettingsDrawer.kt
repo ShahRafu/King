@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.shahrafuking.kingassistant.system.BatteryHelper
+import com.shahrafuking.kingassistant.ui.screens.LogoPickerScreen
 
 @Composable
 fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
@@ -33,6 +34,7 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
     var showSecrets by remember { mutableStateOf(false) }
     var showPermissions by remember { mutableStateOf(false) }
     var showPlugins by remember { mutableStateOf(false) }
+    var showLogoPicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.h6)
@@ -64,6 +66,10 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(onClick = { showPermissions = true }) {
             Text("Permission Check")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(onClick = { showLogoPicker = true }) {
+            Text("App Logo & Theme")
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -134,13 +140,26 @@ fun SettingsDrawerScreen(prefs: SharedPreferences, onClose: () -> Unit) {
             }
         )
     }
+
+    if (showLogoPicker) {
+        AlertDialog(
+            onDismissRequest = { showLogoPicker = false },
+            title = { Text("App Logo & Theme") },
+            text = {
+                Column { LogoPickerScreen(LocalContext.current, onClose = { showLogoPicker = false }) }
+            },
+            confirmButton = {
+                Button(onClick = { showLogoPicker = false }) { Text("Done") }
+            }
+        )
+    }
 }
 
 @Composable
 fun SettingsToggleRow(title: String, subtitle: String, prefs: SharedPreferences, key: String) {
     var enabled by remember { mutableStateOf(prefs.getBoolean(key, false)) }
     Row(modifier = Modifier.padding(vertical = 8.dp)) {
-        Column(modifier = Modifier.fillMaxWidth(0.75f)) {
+        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth(0.75f)) {
             Text(title)
             Text(subtitle, style = MaterialTheme.typography.caption)
         }
