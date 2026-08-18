@@ -18,6 +18,7 @@ fun HomeScreen(
     authenticated: Boolean,
     onStartAuth: () -> Unit,
     onSendText: (String) -> Unit,
+    onOpenSettings: () -> Unit, // new callback to open drawer
     modifier: Modifier = Modifier
 ) {
     var input by remember { mutableStateOf("") }
@@ -27,11 +28,11 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { /* open settings */ }) {
+            IconButton(onClick = { onOpenSettings() }) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings")
             }
             Text(text = "King Assistant", style = MaterialTheme.typography.h6)
-            IconButton(onClick = { /* security */ }) {
+            IconButton(onClick = { /* security placeholder */ }) {
                 Icon(Icons.Default.Security, contentDescription = "Security")
             }
         }
@@ -54,7 +55,11 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row {
-                            Button(onClick = { onSendText(input) }) { Text("পাঠান") }
+                            Button(onClick = {
+                                if (input.isNotBlank()) {
+                                    onSendText(input)
+                                }
+                            }) { Text("পাঠান") }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(onClick = onStartAuth) { Text("ভয়েস‑লগইন") }
                         }
