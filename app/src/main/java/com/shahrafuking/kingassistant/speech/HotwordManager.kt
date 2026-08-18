@@ -8,15 +8,13 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import com.shahrafuking.kingassistant.audio.AudioRecorder
-import com.shahrafuking.kingassistant.BuildConfig
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * HotwordManager
  *
- * - Primary path: Porcupine adapter (if BuildConfig.PORCUPINE_ENABLED and adapter init succeeds)
- * - Fallback: Android SpeechRecognizer configured for Bangla (bn-BD) with partial results and simple phrase matching
+ * - Primary path: Porcupine adapter (if enabled) - else fallback to SpeechRecognizer placeholder
  */
 class HotwordManager(private val context: Context) {
     private val TAG = "HotwordManager"
@@ -42,7 +40,7 @@ class HotwordManager(private val context: Context) {
             return
         }
 
-        // Attempt Porcupine path first if enabled in BuildConfig
+        // Attempt Porcupine path first if enabled
         if (isPorcupineEnabled()) {
             try {
                 porcupineEngine = HotwordPorcupineEngine(context)
@@ -76,7 +74,20 @@ class HotwordManager(private val context: Context) {
     }
 
     private fun isPorcupineEnabled(): Boolean {
-        return try { BuildConfig.PORCUPINE_ENABLED } catch (_: Throwable) { false }
+        // Try BuildConfig first; otherwise fallback to package constant
+        return try {
+            try {
+                com.shahrafuking.kingassistant.BuildConfig::class.java.getField("PORCUPINE_ENABLED").get(null) as? Boolean ?: false
+            } catch (_: Throwable) {
+                try {
+                    PORCUPINE_ENABLED
+                } catch (_: Throwable) {
+                    false
+                }
+            }
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     // ------ Porcupine path --------
@@ -141,7 +152,6 @@ class HotwordManager(private val context: Context) {
                     override fun onError(error: Int) {
                         Log.w(TAG, "fallback recognizer error: $error")
                         if (listening.get()) {
-                            // brief delay then restart listening
                             mainScope.launch {
                                 kotlinx.coroutines.delay(600)
                                 if (listening.get()) restartSpeechRecognizer()

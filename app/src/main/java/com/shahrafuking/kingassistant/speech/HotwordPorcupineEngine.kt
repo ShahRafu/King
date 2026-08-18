@@ -22,8 +22,20 @@ class HotwordPorcupineEngine(private val context: Context) : VoiceEngine {
 
     // Path inside app assets where keyword is expected
     private val keywordAssetSubpath = "porcupine" // assets/porcupine/<keyword.ppn>
-    private val keywordFileName: String = try { com.shahrafuking.kingassistant.BuildConfig.PORCUPINE_KEYWORD_FILENAME } catch (_: Throwable) { "" }
-    private val accessKey: String = try { com.shahrafuking.kingassistant.BuildConfig.PORCUPINE_ACCESS_KEY } catch (_: Throwable) { "" }
+
+    private val keywordFileName: String = try {
+        com.shahrafuking.kingassistant.BuildConfig::class.java.getField("PORCUPINE_KEYWORD_FILENAME").get(null) as? String
+            ?: com.shahrafuking.kingassistant.speech.PORCUPINE_KEYWORD_FILENAME
+    } catch (_: Throwable) {
+        com.shahrafuking.kingassistant.speech.PORCUPINE_KEYWORD_FILENAME
+    }
+
+    private val accessKey: String = try {
+        com.shahrafuking.kingassistant.BuildConfig::class.java.getField("PORCUPINE_ACCESS_KEY").get(null) as? String
+            ?: com.shahrafuking.kingassistant.speech.PORCUPINE_ACCESS_KEY
+    } catch (_: Throwable) {
+        com.shahrafuking.kingassistant.speech.PORCUPINE_ACCESS_KEY
+    }
 
     // Placeholder for actual Porcupine instance (replace Any with real type)
     private var porcupineInstance: Any? = null
