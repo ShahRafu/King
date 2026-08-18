@@ -50,7 +50,8 @@ class OverlayService : Service() {
             if (detected) {
                 Log.i(TAG, "Hotword detected")
                 val i = Intent(this@OverlayService, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    // use addFlags to avoid accidentally referencing the onStartCommand 'flags' parameter
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }
                 startActivity(i)
             }
