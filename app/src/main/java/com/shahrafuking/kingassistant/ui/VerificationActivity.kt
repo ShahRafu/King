@@ -61,7 +61,6 @@ class VerificationActivity : AppCompatActivity() {
             visibility = View.VISIBLE
             setPadding(10, 20, 10, 10)
         }
-        // add passTv under verify_status if layout allows; otherwise infoTv will show passphrase
         val parent = findViewById<View>(R.id.verify_status).parent
         if (parent is android.view.ViewGroup) {
             val idx = parent.indexOfChild(infoTv)
@@ -94,10 +93,8 @@ class VerificationActivity : AppCompatActivity() {
     }
 
     private fun generatePassphrase(): String {
-        // mix numeric challenge and short phrases; keep simple to improve ASR match
         val r = Random()
         return if (r.nextBoolean()) {
-            // numeric challenge 4 digits
             val n = 1000 + r.nextInt(9000)
             n.toString()
         } else {
@@ -115,11 +112,9 @@ class VerificationActivity : AppCompatActivity() {
 
     private fun startVerificationFlow() {
         currentPassphrase = generatePassphrase()
-        // Display passphrase prominently
         passTv.text = "Passphrase: $currentPassphrase"
         infoTv.text = "Please say the passphrase shown below."
 
-        // Prepare SpeechRecognizer
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             infoTv.text = "Speech recognizer unavailable. Cannot verify."
             return
@@ -129,7 +124,7 @@ class VerificationActivity : AppCompatActivity() {
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true) // get early events
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
         }
@@ -137,17 +132,14 @@ class VerificationActivity : AppCompatActivity() {
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { infoTv.text = "Listening for passphrase..." }
             override fun onBeginningOfSpeech() {
-                // user started speaking — if TTS is playing, stop immediately (barge-in)
                 tts?.stop()
                 infoTv.text = "Detected speech — capturing..."
-                // Also stop any AudioRecorder based prompts if needed
             }
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {}
             override fun onError(error: Int) {
                 infoTv.text = "ASR error: $error — try again"
-                // allow retry — speak again
             }
 
             override fun onResults(results: Bundle?) {
@@ -157,10 +149,8 @@ class VerificationActivity : AppCompatActivity() {
             }
 
             override fun onPartialResults(partial: Bundle?) {
-                // optional: can inspect partials to stop TTS earlier
                 val parts = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
                 val p = parts.firstOrNull() ?: return
-                // If partial shows user started reading passphrase approx, stop TTS too
                 if (p.isNotBlank()) {
                     tts?.stop()
                 }
@@ -169,7 +159,6 @@ class VerificationActivity : AppCompatActivity() {
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
-        // Start listening BEFORE TTS so barge-in possible
         try {
             speechRecognizer?.startListening(intent)
         } catch (t: Throwable) {
@@ -177,7 +166,6 @@ class VerificationActivity : AppCompatActivity() {
             return
         }
 
-        // Speak the passphrase prompt (TTS). If user speaks immediately, onBeginningOfSpeech will stop TTS.
         tts?.speak("Please repeat: $currentPassphrase", TextToSpeech.QUEUE_FLUSH, null, "PASS_PROMPT")
     }
 
@@ -191,19 +179,18 @@ class VerificationActivity : AppCompatActivity() {
         infoTv.text = "Heard: $transcript"
 
         if (expected.isNotEmpty() && low.contains(expected)) {
-            // passphrase matched; proceed to biometric verification (record short sample & compare)
             infoTv.text = "Passphrase matched. Verifying voice..."
-            // stop ASR to avoid interference
             try { speechRecognizer?.stopListening() } catch (_: Throwable) {}
-            // Use AudioRecorder with AEC already enabled internally if you need raw stream; but we reuse enrollmentManager for feature extraction
             CoroutineScope(Dispatchers.Main).launch {
-                // record short sample (1.8s) using existing enrollment manager (which internally uses AudioRecorder)
-                val features = withContext(Dispatchers.Default) { enrollmentManager.recordAndExtract(1800) }
-                if (features == null) {
+                // record short sample (1.8s) using existing enrollment manager
+                val featuresDouble = withContext(Dispatchers.Default) { enrollmentManager.recordAndExtract(1800) }
+                if (featuresDouble == null) {
                     infoTv.text = "Recording failed during verification."
                     return@launch
                 }
-                val ok = verifier.verify(features, threshold = VoiceVerifier.DEFAULT_THRESHOLD)
+                // convert DoubleArray -> FloatArray for verifier.verify(FloatArray) compatibility
+                val featuresFloat = FloatArray(featuresDouble.size) { i -> featuresDouble[i].toFloat() }
+                val ok = verifier.verify(featuresFloat, threshold = VoiceVerifier.DEFAULT_THRESHOLD)
                 if (ok) {
                     infoTv.text = "Verification successful — welcome Shah Rafu King."
                     Toast.makeText(this@VerificationActivity, "Verified", Toast.LENGTH_LONG).show()
@@ -215,7 +202,6 @@ class VerificationActivity : AppCompatActivity() {
                 }
             }
         } else {
-            // passphrase mismatch
             infoTv.text = "Passphrase did not match. Try again."
         }
     }

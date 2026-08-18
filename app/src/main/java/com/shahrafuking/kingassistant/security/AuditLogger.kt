@@ -9,8 +9,9 @@ class AuditLogger(private val ctx: Context) {
         Log.i("AuditLogger", "event=$event data=$data")
     }
 
-    fun logIllumination(lux: Float, status: String, activity: Activity? = null) {
-        log("illumination", "lux=$lux status=$status")
+    fun logIllumination(lux: Float?, status: String, activity: Activity? = null) {
+        val luxStr = lux?.toString() ?: "unknown"
+        log("illumination", "lux=$luxStr status=$status")
     }
 
     fun logAuthResult(success: Boolean, reason: String? = null, activity: Activity? = null) {

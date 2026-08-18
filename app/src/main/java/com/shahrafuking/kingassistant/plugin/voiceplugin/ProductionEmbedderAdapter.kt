@@ -11,13 +11,13 @@ import kotlin.coroutines.suspendCoroutine
 
 /**
  * ProductionEmbedderAdapter
- * - Records a short PCM segment (ms length), converts to FloatArray and calls ProductionVoicePlugin.
+ * - Records a short PCM segment (ms length), converts to FloatArray and calls ProductionVoicePluginCompat.
  * - Defensive: if embedder not available, returns false and doesn't crash.
  */
 class ProductionEmbedderAdapter(private val context: Context) {
     private val TAG = "ProductionEmbedderAdapter"
     private val recorder = AudioRecorder(context)
-    private val plugin = ProductionVoicePlugin(context)
+    private val plugin = ProductionVoicePluginCompat(context)
 
     /**
      * Record for given durationMs and return normalized float PCM.
@@ -53,7 +53,7 @@ class ProductionEmbedderAdapter(private val context: Context) {
     }
 
     /**
-     * Enroll by recording for durationMs and calling ProductionVoicePlugin.enrollFromPcm()
+     * Enroll by recording for durationMs and calling ProductionVoicePluginCompat.enrollFromPcm()
      */
     suspend fun enroll(durationMs: Int = 2000): Boolean {
         val pcm = recordPcmFloats(durationMs) ?: return false
