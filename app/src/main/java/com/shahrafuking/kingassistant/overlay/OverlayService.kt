@@ -17,6 +17,7 @@ import kotlinx.coroutines.*
 
 /**
  * Foreground service that listens to microphone via HotwordManager.
+ * Uses HotwordManager.startListening(callback) and stopListening() API from the hotword package.
  */
 class OverlayService : Service() {
     companion object {
@@ -44,24 +45,23 @@ class OverlayService : Service() {
         val notif = buildNotification()
         startForeground(NOTIF_ID, notif)
 
-        // wire hotword manager using its listener API
-        hotwordManager.setListener(object : HotwordManager.HotwordListener {
-            override fun onHotwordDetected() {
+        // Use the hotword package API: startListening(callback) and stopListening()
+        hotwordManager.startListening { detected ->
+            if (detected) {
                 Log.i(TAG, "Hotword detected")
                 val i = Intent(this@OverlayService, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
                 startActivity(i)
             }
-        })
-        hotwordManager.start()
+        }
 
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        hotwordManager.stop()
+        try { hotwordManager.stopListening() } catch (_: Throwable) {}
         scope.cancel()
     }
 
@@ -77,7 +77,6 @@ class OverlayService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val pm = packageManager
         val intent = Intent(this, MainActivity::class.java)
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return NotificationCompat.Builder(this, CHANNEL_ID)
