@@ -3,6 +3,7 @@ package com.shahrafuking.kingassistant.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Text
@@ -36,7 +37,8 @@ fun PermissionCheckerScreen(onClose: () -> Unit = {}) {
                 android.Manifest.permission.INTERNET -> "Internet"
                 else -> p
             }
-            Text("$label: ${if (status == android.content.pm.PackageManager.PERMISSION_GRANTED) \"GRANTED\" else \"MISSING\"}")
+            val statusText = if (status == PackageManager.PERMISSION_GRANTED) "GRANTED" else "MISSING"
+            Text("$label: $statusText")
         }
         Spacer(modifier = Modifier.height(12.dp))
         Button(onClick = {
