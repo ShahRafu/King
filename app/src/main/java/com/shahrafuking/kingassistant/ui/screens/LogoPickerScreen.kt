@@ -12,29 +12,28 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.shahrafuking.kingassistant.logo.LogoManager
 
 /**
  * LogoPickerScreen
  * - Allows picking an external logo (for marketing/launcher) and an internal logo (in-app)
- * - For now this is a simple picker that stores the chosen URI strings in LogoManager.
- * - Image previewing is intentionally minimal (shows URI) — integrate your image loader (Coil/Glide)
- *   in future if you want visual previews.
+ * - Uses the system picker (no runtime storage permission needed for picker flow)
+ * - Shows image previews using Coil
  */
 @Composable
 fun LogoPickerScreen(ctx: Context, onClose: () -> Unit = {}) {
     val lm = remember { LogoManager(ctx) }
-    var externalUri by remember { mutableStateOf(lm.getExternalLogo()) }
-    var internalUri by remember { mutableStateOf(lm.getInternalLogo()) }
+    var externalUri by remember { mutableStateOf(lm.getExternalLogo()?.let { Uri.parse(it) }) }
+    var internalUri by remember { mutableStateOf(lm.getInternalLogo()?.let { Uri.parse(it) }) }
 
-    // pick single image
     val pickExternal = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        externalUri = uri?.toString()
-        lm.setExternalLogo(externalUri)
+        externalUri = uri
+        lm.setExternalLogo(uri?.toString())
     }
     val pickInternal = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        internalUri = uri?.toString()
-        lm.setInternalLogo(internalUri)
+        internalUri = uri
+        lm.setInternalLogo(uri?.toString())
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
@@ -43,9 +42,13 @@ fun LogoPickerScreen(ctx: Context, onClose: () -> Unit = {}) {
 
         Card(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
             Column(modifier = Modifier.padding(8.dp)) {
-                Text("External logo (used for marketing / launcher):")
+                Text("External logo (marketing / launcher placeholder)")
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(externalUri ?: "No external logo set")
+                if (externalUri != null) {
+                    AsyncImage(model = externalUri, contentDescription = "External logo preview", modifier = Modifier.fillMaxWidth().height(120.dp))
+                } else {
+                    Text("No external logo set")
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row {
                     Button(onClick = { pickExternal.launch("image/*") }) { Text("Pick External") }
@@ -59,9 +62,13 @@ fun LogoPickerScreen(ctx: Context, onClose: () -> Unit = {}) {
 
         Card(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
             Column(modifier = Modifier.padding(8.dp)) {
-                Text("Internal logo (shown inside the app):")
+                Text("Internal logo (shown inside the app)")
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(internalUri ?: "No internal logo set")
+                if (internalUri != null) {
+                    AsyncImage(model = internalUri, contentDescription = "Internal logo preview", modifier = Modifier.fillMaxWidth().height(120.dp))
+                } else {
+                    Text("No internal logo set")
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row {
                     Button(onClick = { pickInternal.launch("image/*") }) { Text("Pick Internal") }
