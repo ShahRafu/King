@@ -1,9 +1,6 @@
 Title: fix: compile errors — add stubs, imports, and missing constants
 
 Summary: Adds compile-safe stubs and constants to resolve Kotlin compile errors (missing imports, undefined constants, and helper types). Minimal, build-first patch — replace TODOs and inject secrets before production.
-# Pull request: fix/compile-errors-20260817
-
-This PR adds compile-safe stubs and constants to resolve several Kotlin compile errors including missing imports, undefined constants and helper types. It is intended as a minimal, build-first patch — please replace TODOs with real implementations and secret values before shipping to production.
 
 Files added:
 - app/src/main/java/com/shahrafuking/kingassistant/stubs/PanicController.kt
@@ -21,17 +18,3 @@ Files added:
 Testing: Run ./gradlew assembleDebug and iterate on any remaining compile errors.
 
 Security: Do NOT commit production API keys. Use build-time injection or secret management for OPENAI_API_KEY and PORCUPINE_ACCESS_KEY.
-Summary:
-- Adds missing constants: PORCUPINE_ENABLED, PORCUPINE_ACCESS_KEY, PORCUPINE_MODEL_PATH, HOTWORD_DEFAULT_THRESHOLD
-- Adds CameraXImageCollector stub and LipSyncVerifier
-- Adds ApiClientOpenAI accessor with BuildConfig / env fallback
-- Adds ModelClient adapted to okhttp3 modern APIs
-- Adds PanicController & RobotEngine with proper coroutine imports
-- Adds AuditLogger and verification helpers
-
-Testing:
-- Run `./gradlew assembleDebug` locally or on CI. Replace any TODOs and supply API keys via BuildConfig or environment variables.
-
-Security:
-- Do NOT commit production API keys. Use build-time injection or secret management for OPENAI_API_KEY and PORCUPINE_ACCESS_KEY.
-

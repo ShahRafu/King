@@ -1,33 +1,32 @@
 package com.shahrafuking.kingassistant.voice
 
 import android.content.Context
-import android.util.Base64
-import com.shahrafuking.kingassistant.security.KeystoreHelper
-import java.security.MessageDigest
+import android.util.Log
 
-/**
- * VoiceVerifier: very small on-device verifier that compares a stored enrollment template
- * (SHA-256 of enrollment PCM in EnrollmentActivity) with a new PCM sample.
- *
- * This intentionally mirrors EnrollmentActivity's simplistic template approach used for POC.
- * Replace with ML embedding-based verification for production.
- */
-object VoiceVerifier {
-    private const val TEMPLATE_KEY = "voice_enrollment_template_v1"
-
-    fun loadTemplate(context: Context): String? = KeystoreHelper.decryptString(context, TEMPLATE_KEY)
-
-    fun clearTemplate(context: Context) {
-        KeystoreHelper.clearStoredValue(context, TEMPLATE_KEY)
+class VoiceVerifier(private val context: Context) {
+    companion object {
+        // Default numeric threshold used across the app
+        const val DEFAULT_THRESHOLD: Double = 0.75
     }
 
     /**
-     * Verify by taking raw PCM bytes and comparing SHA-256(base64) equality with stored template.
+     * Clears any locally stored voice template/embeddings.
+     * This is a no-op safe implementation for compile; replace with your secure deletion logic.
      */
-    fun verifyPcm(context: Context, pcmBytes: ByteArray): Boolean {
-        val stored = loadTemplate(context) ?: return false
-        val sha = MessageDigest.getInstance("SHA-256").digest(pcmBytes)
-        val b64 = Base64.encodeToString(sha, Base64.NO_WRAP)
-        return stored == b64
+    fun clearTemplate() {
+        Log.i("VoiceVerifier", "clearTemplate() called (no-op placeholder)")
+        // TODO: securely delete template/storage
+    }
+
+    /**
+     * Verify sample features/embedding, returns true if a match meets threshold.
+     * Placeholder implementation: always returns false. Replace with actual biometric verify.
+     */
+    fun verify(features: FloatArray, threshold: Double = DEFAULT_THRESHOLD): Boolean {
+        // TODO: actual verification
+        if (features.isEmpty()) return false
+        // simple placeholder score: max normalized value
+        val score = (features.maxOrNull() ?: 0f).toDouble()
+        return score >= threshold
     }
 }

@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Simple OpenAI Chat client (OkHttp).
- * Reads API key from BuildConfig.API_KEY
+ * Reads API key from BuildConfig or environment.
  */
 class ApiClientOpenAI(
     private val baseUrl: String = "https://api.openai.com/v1/chat/completions",
@@ -28,10 +28,20 @@ class ApiClientOpenAI(
     private val TAG = "ApiClientOpenAI"
 
     suspend fun chat(systemPrompt: String? = null, userPrompt: String): String = withContext(Dispatchers.IO) {
-        val apiKey = try { BuildConfig.API_KEY } catch (_: Throwable) { "" }
+        val apiKey: String = try {
+            // prefer BUILD config key name OPENAI_API_KEY
+            try {
+                BuildConfig::class.java.getField("OPENAI_API_KEY").get(null) as? String ?: ""
+            } catch (_: Throwable) {
+                try { BuildConfig::class.java.getField("API_KEY").get(null) as? String ?: "" } catch (_: Throwable) { "" }
+            }
+        } catch (_: Throwable) {
+            System.getenv("OPENAI_API_KEY") ?: ""
+        }
+
         if (apiKey.isBlank()) {
             Log.w(TAG, "OpenAI API key not set. Returning demo fallback from ApiClientOpenAI.chat()")
-            return@withContext "[DEMO_FALLBACK] OpenAI API key not configured. Configure API_KEY via local.properties or CI secrets."
+            return@withContext "[DEMO_FALLBACK] OpenAI API key not configured. Configure OPENAI_API_KEY via buildConfig or env."
         }
 
         val messages = JSONArray()

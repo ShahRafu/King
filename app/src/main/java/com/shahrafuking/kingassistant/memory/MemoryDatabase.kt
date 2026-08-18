@@ -61,7 +61,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                 // Retrieve or create a DB passphrase stored securely via KeystoreHelper
                 val keyName = "db_passphrase_v1"
                 var passphrase = KeystoreHelper.decryptString(appContext, keyName)
-                if (passphrase == null) {
+                if (passphrase.isNullOrBlank()) {
                     // generate a random 32-byte base64 string
                     val rnd = java.security.SecureRandom()
                     val bytes = ByteArray(32)
@@ -70,7 +70,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                     KeystoreHelper.encryptString(appContext, passphrase, keyName)
                 }
 
-                val pass = passphrase.toByteArray(StandardCharsets.UTF_8)
+                val pass = passphrase!!.toByteArray(StandardCharsets.UTF_8)
                 val factory = SupportFactory(pass)
 
                 return Room.databaseBuilder(appContext, MemoryDatabase::class.java, "king_memory.db")
