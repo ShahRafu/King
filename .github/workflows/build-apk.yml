@@ -26,10 +26,9 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifact (upload entire outputs folder to be safe)
         uses: actions/upload-artifact@v4
         with:
           name: king-assistant-debug-apk
           path: |
-            app/build/outputs/apk/**/*.apk
-            app/build/outputs/bundle/**/*.aab
+            app/build/outputs/**
