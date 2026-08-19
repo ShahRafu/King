@@ -25,7 +25,7 @@ import android.widget.Toast
 
 /**
  * KingHomeScreen - Final home UI skeleton as specified by the product owner.
- * Shows: top-left settings, top-right future slot + IP status, center Voice Orb with live badge,
+ * Shows: top-left settings, top-right future slot + IP status, center live badge,
  * bottom typing chatbox with integrated voice mic button like Gemini search bar.
  */
 
@@ -86,17 +86,7 @@ fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Un
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Voice Orb and live badge
-                    VoiceOrb(
-                        probability = 0,
-                        budgetText = "--",
-                        onClick = onOpenVoiceSamples,
-                        mode = currentMode
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Live badge showing budget/probability
+                    // Live badge showing budget/probability (kept centered now that VoiceOrb is removed)
                     Card(backgroundColor = Color(0xFF1F8A70), modifier = Modifier.padding(8.dp)) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Budget: --", color = Color.White, modifier = Modifier.weight(1f))
