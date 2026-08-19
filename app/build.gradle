@@ -1,8 +1,9 @@
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-    id 'kotlin-kapt'
-}
+// Add DataStore dependency for settings (preferences)
+// This change was added by the automated fix branch to support storing the new Raghu preview setting.
+
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'kotlin-kapt'
 
 android {
     namespace 'com.shahrafuking.kingassistant'
@@ -99,6 +100,9 @@ dependencies {
     implementation 'androidx.compose.material:material-icons-core'
     implementation 'androidx.compose.material:material-icons-extended'
     implementation 'androidx.compose.material3:material3'
+
+    // DataStore Preferences for settings
+    implementation 'androidx.datastore:datastore-preferences:1.1.0'
 
     // Networking
     implementation 'com.squareup.okhttp3:okhttp:4.11.0'
