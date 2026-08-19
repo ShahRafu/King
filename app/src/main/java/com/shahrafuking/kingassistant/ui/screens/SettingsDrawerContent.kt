@@ -1,7 +1,10 @@
 package com.shahrafuking.kingassistant.ui.screens
 
-import android.content.Context
+import android.net.Uri
+import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,91 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
-import androidx.datastore.preferences.core.*
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
-
-// DataStore instance
-private val Context.dataStore by preferencesDataStore(name = "king_settings")
-
-object SettingsKeys {
-    // Raghu preview mode (used by KingHomeScreen and VoiceOrb)
-    val RAGHU_PREVIEW_MODE = stringPreferencesKey("raghu_preview_mode")
-
-    val NEW_FILE_STATUS = booleanPreferencesKey("new_file_status")
-    val ARCHIVE_AUTOSAVE = booleanPreferencesKey("archive_autosave")
-    val MARKETING_NOTEPAD = booleanPreferencesKey("marketing_notepad")
-    val PERSONAL_NOTEPAD = booleanPreferencesKey("personal_notepad")
-    val APP_BRAND_THEME = stringPreferencesKey("app_brand_theme")
-    val VOICE_CALIB_LEVEL = intPreferencesKey("voice_calib_level")
-    val API_KEY_STORE = stringPreferencesKey("api_key_store")
-    val NETWORK_ROTATION = stringPreferencesKey("network_rotation")
-    val PERMISSION_AUTOFIX = booleanPreferencesKey("permission_autofix")
-    val RECOVERY_SYNC = booleanPreferencesKey("recovery_sync")
-    // 11. App Logo Uri key
-    val APP_LOGO_URI = stringPreferencesKey("app_logo_uri")
-    // 12. Advanced Biometric Security keys
-    val ADV_BIO_EYE = booleanPreferencesKey("adv_bio_eye")
-    val ADV_BIO_VOICE = booleanPreferencesKey("adv_bio_voice")
-    val ADV_BIO_VIBRATION = booleanPreferencesKey("adv_bio_vibration")
-}
-
-enum class RaghuPreviewMode(val value: String) {
-    EXTERNAL("external"),
-    COMPACT("compact"),
-    EXPANDED("expanded");
-
-    companion object {
-        fun fromValue(v: String?) = values().firstOrNull { it.value == v } ?: EXTERNAL
-    }
-}
-
-class SettingsRepository(private val ctx: Context) {
-    // Raghu preview flow
-    val raghuPreviewModeFlow: Flow<RaghuPreviewMode> = ctx.dataStore.data.map { prefs ->
-        RaghuPreviewMode.fromValue(prefs[SettingsKeys.RAGHU_PREVIEW_MODE])
-    }
-
-    val newFileStatusFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.NEW_FILE_STATUS] ?: true }
-    val archiveAutoSaveFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ARCHIVE_AUTOSAVE] ?: false }
-    val marketingNotepadFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.MARKETING_NOTEPAD] ?: false }
-    val personalNotepadFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.PERSONAL_NOTEPAD] ?: false }
-    val appBrandThemeFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.APP_BRAND_THEME] ?: "Default" }
-    val voiceCalibFlow: Flow<Int> = ctx.dataStore.data.map { it[SettingsKeys.VOICE_CALIB_LEVEL] ?: 50 }
-    val apiKeyFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.API_KEY_STORE] ?: "" }
-    val networkRotationFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.NETWORK_ROTATION] ?: "Off" }
-    val permissionAutoFixFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.PERMISSION_AUTOFIX] ?: false }
-    val recoverySyncFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.RECOVERY_SYNC] ?: false }
-    val appLogoUriFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.APP_LOGO_URI] ?: "" }
-
-    // Advanced biometric flows
-    val advBioEyeFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_EYE] ?: false }
-    val advBioVoiceFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VOICE] ?: false }
-    val advBioVibrationFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VIBRATION] ?: false }
-
-    suspend fun setRaghuPreviewMode(mode: RaghuPreviewMode) {
-        ctx.dataStore.edit { prefs -> prefs[SettingsKeys.RAGHU_PREVIEW_MODE] = mode.value }
-    }
-
-    suspend fun setNewFileStatus(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.NEW_FILE_STATUS] = v }
-    suspend fun setArchiveAutoSave(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ARCHIVE_AUTOSAVE] = v }
-    suspend fun setMarketingNotepad(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.MARKETING_NOTEPAD] = v }
-    suspend fun setPersonalNotepad(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.PERSONAL_NOTEPAD] = v }
-    suspend fun setAppBrandTheme(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_BRAND_THEME] = v }
-    suspend fun setVoiceCalibLevel(v: Int) = ctx.dataStore.edit { it[SettingsKeys.VOICE_CALIB_LEVEL] = v }
-    suspend fun setApiKey(v: String) = ctx.dataStore.edit { it[SettingsKeys.API_KEY_STORE] = v }
-    suspend fun setNetworkRotation(v: String) = ctx.dataStore.edit { it[SettingsKeys.NETWORK_ROTATION] = v }
-    suspend fun setPermissionAutoFix(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.PERMISSION_AUTOFIX] = v }
-    suspend fun setRecoverySync(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.RECOVERY_SYNC] = v }
-    suspend fun setAppLogoUri(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LOGO_URI] = v }
-
-    // Advanced biometric setters
-    suspend fun setAdvBioEye(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_EYE] = v }
-    suspend fun setAdvBioVoice(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VOICE] = v }
-    suspend fun setAdvBioVibration(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VIBRATION] = v }
-}
 
 @Composable
 fun SettingsDrawerContent(
@@ -124,6 +44,14 @@ fun SettingsDrawerContent(
     val advBioVoice by settingsRepo.advBioVoiceFlow.collectAsState(initial = false)
     val advBioVibration by settingsRepo.advBioVibrationFlow.collectAsState(initial = false)
 
+    // Image picker launcher (system)
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch { settingsRepo.setAppLogoUri(uri.toString()) }
+            Toast.makeText(ctx, "Custom app icon selected (preview saved)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(modifier = Modifier
         .padding(16.dp)
         .fillMaxWidth()) {
@@ -134,7 +62,7 @@ fun SettingsDrawerContent(
         // Raghu preview modes (existing)
         Text("Appearance / রঘু প্রদর্শন", style = MaterialTheme.typography.subtitle1)
         Spacer(modifier = Modifier.height(4.dp))
-        RaghuPreviewMode.values().forEach { mode ->
+        for (mode in RaghuPreviewMode.values()) {
             RowOption(mode = mode, selected = mode == currentMode, onSelect = { onModeSelected(mode) })
         }
         Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -167,14 +95,13 @@ fun SettingsDrawerContent(
             onToggle = { v -> scope.launch { settingsRepo.setPersonalNotepad(v) } }
         )
 
-        // 5. App logo & theme (button to change / choose)
+        // 5. App logo & theme (existing button kept)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("App logo & Brand theme")
                 Text(appBrandTheme, style = MaterialTheme.typography.caption)
             }
             OutlinedButton(onClick = {
-                // placeholder: show toast or open theme picker screen
                 Toast.makeText(ctx, "Open theme / icon picker (placeholder)", Toast.LENGTH_SHORT).show()
             }) {
                 Text("Customize")
@@ -188,7 +115,6 @@ fun SettingsDrawerContent(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Calibration: $voiceCalibLevel", modifier = Modifier.weight(1f))
                 Button(onClick = {
-                    // placeholder: increment calibration for demo
                     val next = (voiceCalibLevel + 10).coerceAtMost(100)
                     scope.launch { settingsRepo.setVoiceCalibLevel(next) }
                 }) { Text("Calibrate") }
@@ -203,7 +129,6 @@ fun SettingsDrawerContent(
                 Text(if (apiKey.isBlank()) "No key saved" else "Key saved", style = MaterialTheme.typography.caption)
             }
             OutlinedButton(onClick = {
-                // placeholder: open API key manager screen
                 Toast.makeText(ctx, "Open API Key manager (placeholder)", Toast.LENGTH_SHORT).show()
             }) { Text("Manage") }
         }
@@ -216,7 +141,6 @@ fun SettingsDrawerContent(
                 Text(networkRotation, style = MaterialTheme.typography.caption)
             }
             OutlinedButton(onClick = {
-                // placeholder: toggle simple rotation option for demo
                 val next = if (networkRotation == "Off") "VPN Rotation" else "Off"
                 scope.launch { settingsRepo.setNetworkRotation(next) }
             }) { Text("Configure") }
@@ -239,12 +163,22 @@ fun SettingsDrawerContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 11. App Logo & Launcher Icon Customizer (existing)
+        // 11. App Logo & Launcher Icon Customizer
         Text("App Logo & Launcher Icon Customizer", style = MaterialTheme.typography.subtitle1)
         Spacer(modifier = Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             if (appLogoUri.isNotBlank()) {
-                Text("Custom icon selected", modifier = Modifier.weight(1f))
+                AndroidView(factory = { ctxInner ->
+                    ImageView(ctxInner).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        setImageURI(Uri.parse(appLogoUri))
+                    }
+                }, modifier = Modifier.size(64.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Custom icon selected")
+                    Text(appLogoUri, style = MaterialTheme.typography.caption, maxLines = 1)
+                }
             } else {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("No custom icon selected")
@@ -255,17 +189,117 @@ fun SettingsDrawerContent(
             Spacer(modifier = Modifier.width(8.dp))
 
             Column {
-                OutlinedButton(onClick = { /* image picker handled elsewhere */ }) {
+                OutlinedButton(onClick = { imagePicker.launch("image/*") }) {
                     Text("Select Image")
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedButton(onClick = {
-                    scope.launch { settingsRepo.setAppLogoUri("") }
-                    Toast.makeText(ctx, "Custom icon cleared", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        settingsRepo.setAppLogoUri("")
+                        Toast.makeText(ctx, "Custom icon cleared", Toast.LENGTH_SHORT).show()
+                    }
                 }) {
                     Text("Reset")
                 }
             }
         }
 
-... (truncated on display)
+        Spacer(modifier = Modifier.height(12.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 12. Advanced Biometric Security
+        Text("Advanced Biometric Security", style = MaterialTheme.typography.subtitle1)
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            "Manage advanced biometrics: Eye (Iris) scan, Voice biometric, and Voice vibration/frequency checks.",
+            style = MaterialTheme.typography.caption
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 12.1 Eye Scan (Iris) setup & calibration
+        SettingSwitchRow(
+            title = "Eye Scan (Iris) — setup & calibration",
+            checked = advBioEye,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioEye(v) } }
+        )
+        if (advBioEye) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Iris calibration", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    Toast.makeText(ctx, "Start Iris setup (placeholder)", Toast.LENGTH_SHORT).show()
+                }) { Text("Setup") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // 12.2 Voice Recognition (biometric)
+        SettingSwitchRow(
+            title = "Voice Recognition (biometric)",
+            checked = advBioVoice,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVoice(v) } }
+        )
+        if (advBioVoice) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Voice enrollment", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    Toast.makeText(ctx, "Start Voice enrollment (placeholder)", Toast.LENGTH_SHORT).show()
+                }) { Text("Enroll") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // 12.3 Voice Vibration / Frequency verification
+        SettingSwitchRow(
+            title = "Voice Vibration / Frequency verification",
+            checked = advBioVibration,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVibration(v) } }
+        )
+        if (advBioVibration) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Vibration/frequency scan", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    Toast.makeText(ctx, "Start frequency test (placeholder)", Toast.LENGTH_SHORT).show()
+                }) { Text("Test") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // small CTA
+        Button(
+            onClick = {
+                Toast.makeText(ctx, "Settings saved locally", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text("Save & Close")
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(title: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title)
+        }
+        Switch(checked = checked, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
+private fun RowOption(mode: RaghuPreviewMode, selected: Boolean, onSelect: () -> Unit) {
+    Row(modifier = Modifier
+        .padding(vertical = 8.dp)
+        .clickable { onSelect() }) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(mode.name, modifier = Modifier.padding(start = 8.dp))
+    }
+}
