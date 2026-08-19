@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.launch
 
 /**
  * KingHomeScreen - Final home UI skeleton as specified by the product owner.
@@ -28,70 +30,95 @@ import androidx.compose.ui.text.style.TextAlign
 @Composable
 fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Unit = {}) {
     val ctx = LocalContext.current
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("King Assistant") },
-                navigationIcon = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Settings")
-                    }
-                },
-                actions = {
-                    // Future slot (+)
-                    IconButton(onClick = { /* TODO: future slot action */ }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Future Slot")
-                    }
-                    // IP / Security status (simple badge)
-                    Box(modifier = Modifier.padding(end = 8.dp), contentAlignment = Alignment.Center) {
-                        Text("IP: OK", fontSize = 12.sp, color = Color.White)
-                    }
+
+    // Drawer state for settings
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // Settings repository & current mode
+    val settingsRepo = remember { SettingsRepository(ctx) }
+    val currentMode by settingsRepo.raghuPreviewModeFlow.collectAsState(initial = RaghuPreviewMode.EXTERNAL)
+
+    ModalDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            SettingsDrawerContent(currentMode = currentMode, onModeSelected = { mode ->
+                scope.launch {
+                    settingsRepo.setRaghuPreviewMode(mode)
+                    drawerState.close()
                 }
-            )
-        },
-        content = { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Voice Orb and live badge
-                VoiceOrb(
-                    probability = 0,
-                    budgetText = "--",
-                    onClick = onOpenVoiceSamples
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Live badge showing budget/probability
-                Card(backgroundColor = Color(0xFF1F8A70), modifier = Modifier.padding(8.dp)) {
-                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Budget: --", color = Color.White, modifier = Modifier.weight(1f))
-                        Text("Prob: --%", color = Color.White)
-                    }
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Typing chatbox at bottom
-                var text by remember { mutableStateOf("") }
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Type a message...") }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = { /* send message */ }) { Text("Send") }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            })
         }
-    )
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("King Assistant") },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            onOpenSettings()
+                            scope.launch { drawerState.open() }
+                        }) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Settings")
+                        }
+                    },
+                    actions = {
+                        // Future slot (+)
+                        IconButton(onClick = { /* TODO: future slot action */ }) {
+                            Icon(Icons.Filled.Add, contentDescription = "Future Slot")
+                        }
+                        // IP / Security status (simple badge)
+                        Box(modifier = Modifier.padding(end = 8.dp), contentAlignment = Alignment.Center) {
+                            Text("IP: OK", fontSize = 12.sp, color = Color.White)
+                        }
+                    }
+                )
+            },
+            content = { padding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Voice Orb and live badge
+                    VoiceOrb(
+                        probability = 0,
+                        budgetText = "--",
+                        onClick = onOpenVoiceSamples,
+                        mode = currentMode
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live badge showing budget/probability
+                    Card(backgroundColor = Color(0xFF1F8A70), modifier = Modifier.padding(8.dp)) {
+                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Budget: --", color = Color.White, modifier = Modifier.weight(1f))
+                            Text("Prob: --%", color = Color.White)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Typing chatbox at bottom
+                    var text by remember { mutableStateOf("") }
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Type a message...") }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(onClick = { /* send message */ }) { Text("Send") }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        )
+    }
 }
