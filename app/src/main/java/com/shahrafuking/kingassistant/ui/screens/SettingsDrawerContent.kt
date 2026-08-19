@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
 private val Context.dataStore by preferencesDataStore(name = "king_settings")
 
 object SettingsKeys {
+    // Raghu preview mode (used by KingHomeScreen and VoiceOrb)
+    val RAGHU_PREVIEW_MODE = stringPreferencesKey("raghu_preview_mode")
+
     val NEW_FILE_STATUS = booleanPreferencesKey("new_file_status")
     val ARCHIVE_AUTOSAVE = booleanPreferencesKey("archive_autosave")
     val MARKETING_NOTEPAD = booleanPreferencesKey("marketing_notepad")
@@ -31,7 +34,7 @@ object SettingsKeys {
     val NETWORK_ROTATION = stringPreferencesKey("network_rotation")
     val PERMISSION_AUTOFIX = booleanPreferencesKey("permission_autofix")
     val RECOVERY_SYNC = booleanPreferencesKey("recovery_sync")
-    // 11. App Logo Uri key (if present in file)
+    // 11. App Logo Uri key
     val APP_LOGO_URI = stringPreferencesKey("app_logo_uri")
     // 12. Advanced Biometric Security keys
     val ADV_BIO_EYE = booleanPreferencesKey("adv_bio_eye")
@@ -39,7 +42,22 @@ object SettingsKeys {
     val ADV_BIO_VIBRATION = booleanPreferencesKey("adv_bio_vibration")
 }
 
+enum class RaghuPreviewMode(val value: String) {
+    EXTERNAL("external"),
+    COMPACT("compact"),
+    EXPANDED("expanded");
+
+    companion object {
+        fun fromValue(v: String?) = values().firstOrNull { it.value == v } ?: EXTERNAL
+    }
+}
+
 class SettingsRepository(private val ctx: Context) {
+    // Raghu preview flow
+    val raghuPreviewModeFlow: Flow<RaghuPreviewMode> = ctx.dataStore.data.map { prefs ->
+        RaghuPreviewMode.fromValue(prefs[SettingsKeys.RAGHU_PREVIEW_MODE])
+    }
+
     val newFileStatusFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.NEW_FILE_STATUS] ?: true }
     val archiveAutoSaveFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ARCHIVE_AUTOSAVE] ?: false }
     val marketingNotepadFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.MARKETING_NOTEPAD] ?: false }
@@ -56,6 +74,10 @@ class SettingsRepository(private val ctx: Context) {
     val advBioEyeFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_EYE] ?: false }
     val advBioVoiceFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VOICE] ?: false }
     val advBioVibrationFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VIBRATION] ?: false }
+
+    suspend fun setRaghuPreviewMode(mode: RaghuPreviewMode) {
+        ctx.dataStore.edit { prefs -> prefs[SettingsKeys.RAGHU_PREVIEW_MODE] = mode.value }
+    }
 
     suspend fun setNewFileStatus(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.NEW_FILE_STATUS] = v }
     suspend fun setArchiveAutoSave(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ARCHIVE_AUTOSAVE] = v }
@@ -246,73 +268,4 @@ fun SettingsDrawerContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Divider()
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 12. Advanced Biometric Security
-        Text("Advanced Biometric Security", style = MaterialTheme.typography.subtitle1)
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 12.1 Eye Scan (Iris)
-        SettingSwitchRow(
-            title = "Eye Scan (Iris) setup & calibration",
-            checked = advBioEye,
-            onToggle = { v -> scope.launch { settingsRepo.setAdvBioEye(v) } }
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 12.2 Voice Recognition
-        SettingSwitchRow(
-            title = "Voice Recognition (biometric)",
-            checked = advBioVoice,
-            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVoice(v) } }
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 12.3 Voice Vibration / Frequency
-        SettingSwitchRow(
-            title = "Voice Vibration / Frequency verification",
-            checked = advBioVibration,
-            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVibration(v) } }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // small CTA
-        Button(
-            onClick = {
-                Toast.makeText(ctx, "Settings saved locally", Toast.LENGTH_SHORT).show()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text("Save & Close")
-        }
-    }
-}
-
-@Composable
-private fun SettingSwitchRow(title: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title)
-        }
-        Switch(checked = checked, onCheckedChange = onToggle)
-    }
-}
-
-// existing helper (kept)
-@Composable
-private fun RowOption(mode: RaghuPreviewMode, selected: Boolean, onSelect: () -> Unit) {
-    Row(modifier = Modifier
-        .padding(vertical = 8.dp)
-        .clickable { onSelect() }) {
-        RadioButton(selected = selected, onClick = onSelect)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(mode.name, modifier = Modifier.padding(start = 8.dp))
-    }
-}
+... (truncated on display)
