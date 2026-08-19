@@ -7,7 +7,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,10 +36,10 @@ fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Uni
             Text("King Assistant", color = Color.White, style = MaterialTheme.typography.h6)
             Spacer(modifier = Modifier.height(6.dp))
             Box(modifier = Modifier
-                .size((64 * scale).dp)
+                .size((64f * scale).dp)
                 .clip(CircleShape)
                 .background(Color(0xFFFF6B6B)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Mic, contentDescription = "Mic", tint = Color.White)
+                Icon(Icons.Filled.Mic, contentDescription = "Mic", tint = Color.White)
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text("Prob: $probability%", color = Color.White)

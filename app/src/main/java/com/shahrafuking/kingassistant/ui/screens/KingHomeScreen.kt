@@ -5,6 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,13 +34,13 @@ fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Un
                 title = { Text("King Assistant") },
                 navigationIcon = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Menu, contentDescription = "Settings")
+                        Icon(Icons.Filled.Menu, contentDescription = "Settings")
                     }
                 },
                 actions = {
                     // Future slot (+)
                     IconButton(onClick = { /* TODO: future slot action */ }) {
-                        Icon(Icons.Default.Add, contentDescription = "Future Slot")
+                        Icon(Icons.Filled.Add, contentDescription = "Future Slot")
                     }
                     // IP / Security status (simple badge)
                     Box(modifier = Modifier.padding(end = 8.dp), contentAlignment = Alignment.Center) {
