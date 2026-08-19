@@ -8,6 +8,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -20,11 +21,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.launch
+import android.widget.Toast
 
 /**
  * KingHomeScreen - Final home UI skeleton as specified by the product owner.
  * Shows: top-left settings, top-right future slot + IP status, center Voice Orb with live badge,
- * bottom typing chatbox. All actions currently wired to placeholders or local screens in the branch.
+ * bottom typing chatbox with integrated voice mic button like Gemini search bar.
  */
 
 @Composable
@@ -104,17 +106,37 @@ fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Un
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Typing chatbox at bottom
+                    // Typing chatbox at bottom with integrated voice mic (like Gemini search bar)
                     var text by remember { mutableStateOf("") }
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         OutlinedTextField(
                             value = text,
                             onValueChange = { text = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Type a message...") }
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            placeholder = { Text("Type a message or tap mic") },
+                            trailingIcon = {
+                                IconButton(onClick = {
+                                    // Voice mic pressed - placeholder action
+                                    Toast.makeText(ctx, "Voice input (placeholder)", Toast.LENGTH_SHORT).show()
+                                    // Here you can start actual voice recognition or recorder
+                                }) {
+                                    Icon(Icons.Filled.Mic, contentDescription = "Voice")
+                                }
+                            }
                         )
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { /* send message */ }) { Text("Send") }
+
+                        Button(onClick = { /* send message */ Toast.makeText(ctx, "Send (placeholder)", Toast.LENGTH_SHORT).show() }) {
+                            Text("Send")
+                        }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
