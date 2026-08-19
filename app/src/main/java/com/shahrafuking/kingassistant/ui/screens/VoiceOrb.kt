@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Unit = {}) {
+fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Unit = {}, mode: RaghuPreviewMode = RaghuPreviewMode.EXTERNAL) {
     // simple pulsing animation to imply listening/processing
     val infiniteTransition = rememberInfiniteTransition()
     val scale by infiniteTransition.animateFloat(
@@ -27,8 +27,20 @@ fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Uni
         animationSpec = infiniteRepeatable(animation = tween(900, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse)
     )
 
+    val outerSize = when(mode) {
+        RaghuPreviewMode.COMPACT -> 120.dp
+        RaghuPreviewMode.EXPANDED -> 220.dp
+        RaghuPreviewMode.EXTERNAL -> 180.dp
+    }
+
+    val innerBase = when(mode) {
+        RaghuPreviewMode.COMPACT -> 48f
+        RaghuPreviewMode.EXPANDED -> 88f
+        RaghuPreviewMode.EXTERNAL -> 64f
+    }
+
     Box(modifier = Modifier
-        .size(180.dp)
+        .size(outerSize)
         .clip(CircleShape)
         .background(Color(0xFF314B8A))
         .padding(12.dp), contentAlignment = Alignment.Center) {
@@ -36,7 +48,7 @@ fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Uni
             Text("King Assistant", color = Color.White, style = MaterialTheme.typography.h6)
             Spacer(modifier = Modifier.height(6.dp))
             Box(modifier = Modifier
-                .size((64f * scale).dp)
+                .size((innerBase * scale).dp)
                 .clip(CircleShape)
                 .background(Color(0xFFFF6B6B)), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Mic, contentDescription = "Mic", tint = Color.White)
@@ -44,6 +56,19 @@ fun VoiceOrb(probability: Int = 0, budgetText: String = "--", onClick: () -> Uni
             Spacer(modifier = Modifier.height(6.dp))
             Text("Prob: $probability%", color = Color.White)
             Text("Budget: $budgetText", color = Color.White)
+
+            if (mode == RaghuPreviewMode.EXPANDED) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Detailed status: listening, model ready", color = Color.White, maxLines = 2)
+            }
+
+            if (mode == RaghuPreviewMode.EXTERNAL) {
+                Spacer(modifier = Modifier.height(8.dp))
+                // External preview button is a placeholder; integrate with your external preview Intent if available
+                androidx.compose.material.Button(onClick = onClick) {
+                    androidx.compose.material.Text("Open External Preview")
+                }
+            }
         }
     }
 }
