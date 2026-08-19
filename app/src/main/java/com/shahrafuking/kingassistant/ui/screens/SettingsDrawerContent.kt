@@ -31,7 +31,12 @@ object SettingsKeys {
     val NETWORK_ROTATION = stringPreferencesKey("network_rotation")
     val PERMISSION_AUTOFIX = booleanPreferencesKey("permission_autofix")
     val RECOVERY_SYNC = booleanPreferencesKey("recovery_sync")
-    // Existing Raghu preview key left in KingHomeScreen.SettingsRepository if present
+    // 11. App Logo Uri key (if present in file)
+    val APP_LOGO_URI = stringPreferencesKey("app_logo_uri")
+    // 12. Advanced Biometric Security keys
+    val ADV_BIO_EYE = booleanPreferencesKey("adv_bio_eye")
+    val ADV_BIO_VOICE = booleanPreferencesKey("adv_bio_voice")
+    val ADV_BIO_VIBRATION = booleanPreferencesKey("adv_bio_vibration")
 }
 
 class SettingsRepository(private val ctx: Context) {
@@ -45,6 +50,12 @@ class SettingsRepository(private val ctx: Context) {
     val networkRotationFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.NETWORK_ROTATION] ?: "Off" }
     val permissionAutoFixFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.PERMISSION_AUTOFIX] ?: false }
     val recoverySyncFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.RECOVERY_SYNC] ?: false }
+    val appLogoUriFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.APP_LOGO_URI] ?: "" }
+
+    // Advanced biometric flows
+    val advBioEyeFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_EYE] ?: false }
+    val advBioVoiceFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VOICE] ?: false }
+    val advBioVibrationFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VIBRATION] ?: false }
 
     suspend fun setNewFileStatus(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.NEW_FILE_STATUS] = v }
     suspend fun setArchiveAutoSave(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ARCHIVE_AUTOSAVE] = v }
@@ -56,6 +67,12 @@ class SettingsRepository(private val ctx: Context) {
     suspend fun setNetworkRotation(v: String) = ctx.dataStore.edit { it[SettingsKeys.NETWORK_ROTATION] = v }
     suspend fun setPermissionAutoFix(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.PERMISSION_AUTOFIX] = v }
     suspend fun setRecoverySync(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.RECOVERY_SYNC] = v }
+    suspend fun setAppLogoUri(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LOGO_URI] = v }
+
+    // Advanced biometric setters
+    suspend fun setAdvBioEye(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_EYE] = v }
+    suspend fun setAdvBioVoice(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VOICE] = v }
+    suspend fun setAdvBioVibration(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VIBRATION] = v }
 }
 
 @Composable
@@ -78,6 +95,12 @@ fun SettingsDrawerContent(
     val networkRotation by settingsRepo.networkRotationFlow.collectAsState(initial = "Off")
     val permissionAutoFix by settingsRepo.permissionAutoFixFlow.collectAsState(initial = false)
     val recoverySync by settingsRepo.recoverySyncFlow.collectAsState(initial = false)
+    val appLogoUri by settingsRepo.appLogoUriFlow.collectAsState(initial = "")
+
+    // advanced biometric states
+    val advBioEye by settingsRepo.advBioEyeFlow.collectAsState(initial = false)
+    val advBioVoice by settingsRepo.advBioVoiceFlow.collectAsState(initial = false)
+    val advBioVibration by settingsRepo.advBioVibrationFlow.collectAsState(initial = false)
 
     Column(modifier = Modifier
         .padding(16.dp)
@@ -190,6 +213,68 @@ fun SettingsDrawerContent(
             title = "Emergency Data Recovery & Cloud Sync",
             checked = recoverySync,
             onToggle = { v -> scope.launch { settingsRepo.setRecoverySync(v) } }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 11. App Logo & Launcher Icon Customizer (existing)
+        Text("App Logo & Launcher Icon Customizer", style = MaterialTheme.typography.subtitle1)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            if (appLogoUri.isNotBlank()) {
+                Text("Custom icon selected", modifier = Modifier.weight(1f))
+            } else {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("No custom icon selected")
+                    Text("Select from gallery or file manager", style = MaterialTheme.typography.caption)
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column {
+                OutlinedButton(onClick = { /* image picker handled elsewhere */ }) {
+                    Text("Select Image")
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(onClick = {
+                    scope.launch { settingsRepo.setAppLogoUri("") }
+                    Toast.makeText(ctx, "Custom icon cleared", Toast.LENGTH_SHORT).show()
+                }) {
+                    Text("Reset")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 12. Advanced Biometric Security
+        Text("Advanced Biometric Security", style = MaterialTheme.typography.subtitle1)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 12.1 Eye Scan (Iris)
+        SettingSwitchRow(
+            title = "Eye Scan (Iris) setup & calibration",
+            checked = advBioEye,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioEye(v) } }
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 12.2 Voice Recognition
+        SettingSwitchRow(
+            title = "Voice Recognition (biometric)",
+            checked = advBioVoice,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVoice(v) } }
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 12.3 Voice Vibration / Frequency
+        SettingSwitchRow(
+            title = "Voice Vibration / Frequency verification",
+            checked = advBioVibration,
+            onToggle = { v -> scope.launch { settingsRepo.setAdvBioVibration(v) } }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
