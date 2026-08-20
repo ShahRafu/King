@@ -1,0 +1,22 @@
+{
+  "name": "search-backend-proxy",
+  "version": "1.0.0",
+  "description": "Backend proxy for fetching public web data (Wiki, RSS, scrape) for King app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "helmet": "^6.0.0",
+    "node-cache": "^5.1.2",
+    "rss-parser": "^3.12.0",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.0.3"
+  }
+}
