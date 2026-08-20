@@ -1,43 +1,40 @@
 package com.shahrafuking.kingassistant.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import android.widget.Toast
 
 /**
- * KingHomeScreen - Final home UI skeleton as specified by the product owner.
- * Shows: top-left settings, top-right future slot + IP status, center live badge,
- * bottom typing chatbox with integrated voice mic button like Gemini search bar.
+ * Updated KingHomeScreen per UI refinements:
+ * - Removed top black header/status area
+ * - Replaced 3-dot menu with Settings icon (top-right)
+ * - Disabled swipe-to-open for the drawer (open only via settings icon click)
+ * - Redesigned bottom input box to a clean GitHub-like search bar (removed literal "Search" placeholder)
  */
 
 @Composable
-fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Unit = {}) {
+fun KingHomeScreen(onSettingsSelected: (() -> Unit)? = null) {
     val ctx = LocalContext.current
-
-    // Drawer state for settings
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // Settings repository & current mode
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    // Settings repository & current mode (kept for compatibility)
     val settingsRepo = remember { SettingsRepository(ctx) }
     val currentMode by settingsRepo.raghuPreviewModeFlow.collectAsState(initial = RaghuPreviewMode.EXTERNAL)
 
@@ -50,87 +47,103 @@ fun KingHomeScreen(onOpenSettings: () -> Unit = {}, onOpenVoiceSamples: () -> Un
                     drawerState.close()
                 }
             })
-        }
+        },
+        gesturesEnabled = false // disable edge swipe-to-open; only Settings icon opens it
     ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("King Assistant") },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            onOpenSettings()
-                            scope.launch { drawerState.open() }
-                        }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "Settings")
-                        }
-                    },
-                    actions = {
-                        // Future slot (+)
-                        IconButton(onClick = { /* TODO: future slot action */ }) {
-                            Icon(Icons.Filled.Add, contentDescription = "Future Slot")
-                        }
-                        // IP / Security status (simple badge)
-                        Box(modifier = Modifier.padding(end = 8.dp), contentAlignment = Alignment.Center) {
-                            Text("IP: OK", fontSize = 12.sp, color = Color.White)
-                        }
+        // No TopAppBar; place a settings icon fixed at the top-right inside the content
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)) {
+
+            IconButton(
+                onClick = {
+                    onSettingsSelected?.invoke()
+                    scope.launch { drawerState.open() }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Open settings",
+                    tint = MaterialTheme.colors.onBackground
+                )
+            }
+
+            // Main screen content
+            Column(modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+                .padding(top = 56.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // small example score card (replace with real content)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    backgroundColor = Color(0xFF1F8A70),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(modifier = Modifier
+                        .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Budget: --", color = Color.White, modifier = Modifier.weight(1f))
+                        Text(text = "Prob: --%", color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Bottom input styled like GitHub search bar
+                ChatSearchBar(
+                    onSend = { msg ->
+                        Toast.makeText(ctx, "Send: $msg", Toast.LENGTH_SHORT).show()
                     }
                 )
-            },
-            content = { padding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Live badge showing budget/probability (kept centered now that VoiceOrb is removed)
-                    Card(backgroundColor = Color(0xFF1F8A70), modifier = Modifier.padding(8.dp)) {
-                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Budget: --", color = Color.White, modifier = Modifier.weight(1f))
-                            Text("Prob: --%", color = Color.White)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    // Typing chatbox at bottom with integrated voice mic (like Gemini search bar)
-                    var text by remember { mutableStateOf("") }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = text,
-                            onValueChange = { text = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                            placeholder = { Text("Type a message or tap mic") },
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    // Voice mic pressed - placeholder action
-                                    Toast.makeText(ctx, "Voice input (placeholder)", Toast.LENGTH_SHORT).show()
-                                    // Here you can start actual voice recognition or recorder
-                                }) {
-                                    Icon(Icons.Filled.Mic, contentDescription = "Voice")
-                                }
-                            }
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Button(onClick = { /* send message */ Toast.makeText(ctx, "Send (placeholder)", Toast.LENGTH_SHORT).show() }) {
-                            Text("Send")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatSearchBar(onSend: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = null, // removed literal "Search" placeholder per spec
+            singleLine = true,
+            leadingIcon = {
+                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Color.Gray)
+            },
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp),
+            shape = RoundedCornerShape(10.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                backgroundColor = MaterialTheme.colors.surface,
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                cursorColor = MaterialTheme.colors.onSurface
+            )
         )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        IconButton(onClick = { onSend(text); text = "" }) {
+            Icon(imageVector = Icons.Default.Send, contentDescription = "Send")
+        }
     }
 }
