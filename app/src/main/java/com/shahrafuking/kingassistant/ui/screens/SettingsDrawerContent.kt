@@ -21,10 +21,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Refactored SettingsDrawerContent:
+ * - Persist App Language selection via SettingsRepository
  * - Cleaned header and removed unwanted visual bars
- * - Removed redundant theme/language/about blocks from the main list
- * - Provides vertically scrollable content (LazyColumn) so all options and Score view are reachable
- * - Adds a new 'App Language' selector as the 13th option (UI-only selector; persist as needed)
+ * - Provides vertically scrollable content (LazyColumn)
  */
 
 @Composable
@@ -36,7 +35,7 @@ fun SettingsDrawerContent(
     val settingsRepo = remember { SettingsRepository(ctx) }
     val scope = rememberCoroutineScope()
 
-    // collect a few states used elsewhere
+    // collect states
     val newFileStatus by settingsRepo.newFileStatusFlow.collectAsState(initial = true)
     val archiveAutoSave by settingsRepo.archiveAutoSaveFlow.collectAsState(initial = false)
     val apiKey by settingsRepo.apiKeyFlow.collectAsState(initial = "")
@@ -49,6 +48,11 @@ fun SettingsDrawerContent(
     val advBioVoice by settingsRepo.advBioVoiceFlow.collectAsState(initial = false)
     val advBioVibration by settingsRepo.advBioVibrationFlow.collectAsState(initial = false)
 
+    // persisted language selection
+    val selectedLanguage by settingsRepo.appLanguageFlow.collectAsState(initial = "English")
+    var languageExpanded by remember { mutableStateOf(false) }
+    val languages = listOf("English", "বাংলা (Bangla)", "Español", "Français", "中文")
+
     // Image picker launcher (system)
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
@@ -57,12 +61,6 @@ fun SettingsDrawerContent(
         }
     }
 
-    // Local UI state for the new App Language selector (persist via SettingsRepository if you add a key)
-    var selectedLanguage by remember { mutableStateOf("English") }
-    var languageExpanded by remember { mutableStateOf(false) }
-    val languages = listOf("English", "বাংলা (Bangla)", "Español", "Français", "中文")
-
-    // Compact list of settings options (cleaned)
     val options = listOf(
         "Profile",
         "Account",
@@ -76,19 +74,15 @@ fun SettingsDrawerContent(
         "Permissions & System Health",
         "Emergency Data Recovery",
         "Advanced Biometric Security",
-        "App Language" // 13th option
+        "App Language"
     )
 
     LazyColumn(modifier = Modifier
         .fillMaxSize()
         .padding(vertical = 8.dp)) {
 
-        item {
-            // Minimal top spacing (no large header label)
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+        item { Spacer(modifier = Modifier.height(8.dp)) }
 
-        // Raghu preview mode radios (kept but compact)
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Text(text = "Appearance", style = MaterialTheme.typography.subtitle1)
@@ -100,9 +94,7 @@ fun SettingsDrawerContent(
             }
         }
 
-        // Main options list
         itemsIndexed(options) { index, option ->
-            // Special UI for some options
             when (option) {
                 "App Language" -> {
                     Column(modifier = Modifier
@@ -117,10 +109,9 @@ fun SettingsDrawerContent(
                             DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
                                 languages.forEach { lang ->
                                     DropdownMenuItem(onClick = {
-                                        selectedLanguage = lang
+                                        scope.launch { settingsRepo.setAppLanguage(lang) }
                                         languageExpanded = false
-                                        // TODO: persist selection to SettingsRepository (add key + setter in SettingsModel)
-                                        Toast.makeText(ctx, "Language set to $lang (UI-only)", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, "Language set to $lang", Toast.LENGTH_SHORT).show()
                                     }) {
                                         Text(lang)
                                     }
@@ -186,7 +177,6 @@ fun SettingsDrawerContent(
                 }
 
                 else -> {
-                    // generic clickable row for remaining options
                     Row(modifier = Modifier
                         .fillMaxWidth()
                         .clickable { /* navigate to option */ }
@@ -199,7 +189,6 @@ fun SettingsDrawerContent(
             Divider()
         }
 
-        // App logo customizer snippet (kept compact)
         item {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("App Icon", style = MaterialTheme.typography.subtitle1)
@@ -235,7 +224,6 @@ fun SettingsDrawerContent(
             }
         }
 
-        // Score view at bottom so it's reachable after scrolling
         item {
             Card(modifier = Modifier
                 .fillMaxWidth()
@@ -248,7 +236,6 @@ fun SettingsDrawerContent(
             }
         }
 
-        // Save & close button at the very bottom
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -260,8 +247,6 @@ fun SettingsDrawerContent(
         }
     }
 }
-
-// Keeping helper composables unchanged
 
 @Composable
 private fun SettingSwitchRow(title: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
