@@ -104,7 +104,7 @@ fun SettingsDrawerContent(
                         Spacer(modifier = Modifier.height(6.dp))
                         Box {
                             OutlinedButton(onClick = { languageExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(selectedLanguage)
+                                Text(text = selectedLanguage)
                             }
                             DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
                                 languages.forEach { lang ->
@@ -113,7 +113,7 @@ fun SettingsDrawerContent(
                                         languageExpanded = false
                                         Toast.makeText(ctx, "Language set to $lang", Toast.LENGTH_SHORT).show()
                                     }) {
-                                        Text(lang)
+                                        Text(text = lang)
                                     }
                                 }
                             }
@@ -125,7 +125,7 @@ fun SettingsDrawerContent(
                     Column(modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(option)
+                        Text(text = option)
                         Spacer(modifier = Modifier.height(6.dp))
                         SettingSwitchRow(
                             title = "Eye Scan (Iris)",
@@ -151,11 +151,11 @@ fun SettingsDrawerContent(
                         .clickable { /* open manager */ }
                         .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(option)
-                            Text(if (apiKey.isBlank()) "No key saved" else "Key saved", style = MaterialTheme.typography.caption)
+                            Text(text = option)
+                            Text(text = if (apiKey.isBlank()) "No key saved" else "Key saved", style = MaterialTheme.typography.caption)
                         }
                         OutlinedButton(onClick = { /* manage */ }) {
-                            Text("Manage")
+                            Text(text = "Manage")
                         }
                     }
                 }
@@ -181,7 +181,7 @@ fun SettingsDrawerContent(
                         .fillMaxWidth()
                         .clickable { /* navigate to option */ }
                         .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(option)
+                        Text(text = option)
                     }
                 }
             }
@@ -191,7 +191,7 @@ fun SettingsDrawerContent(
 
         item {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("App Icon", style = MaterialTheme.typography.subtitle1)
+                Text(text = "App Icon", style = MaterialTheme.typography.subtitle1)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (appLogoUri.isNotBlank()) {
@@ -203,20 +203,20 @@ fun SettingsDrawerContent(
                         }, modifier = Modifier.size(56.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Custom icon selected")
-                            Text(appLogoUri, style = MaterialTheme.typography.caption, maxLines = 1)
+                            Text(text = "Custom icon selected")
+                            Text(text = appLogoUri, style = MaterialTheme.typography.caption, maxLines = 1)
                         }
                     } else {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("No custom icon selected")
-                            Text("Select from gallery", style = MaterialTheme.typography.caption)
+                            Text(text = "No custom icon selected")
+                            Text(text = "Select from gallery", style = MaterialTheme.typography.caption)
                         }
                     }
 
                     Column {
-                        OutlinedButton(onClick = { imagePicker.launch("image/*") }) { Text("Select") }
+                        OutlinedButton(onClick = { imagePicker.launch("image/*") }) { Text(text = "Select") }
                         Spacer(modifier = Modifier.height(6.dp))
-                        OutlinedButton(onClick = { scope.launch { settingsRepo.setAppLogoUri("") ; Toast.makeText(ctx, "Cleared", Toast.LENGTH_SHORT).show() } }) { Text("Reset") }
+                        OutlinedButton(onClick = { scope.launch { settingsRepo.setAppLogoUri("") ; Toast.makeText(ctx, "Cleared", Toast.LENGTH_SHORT).show() } }) { Text(text = "Reset") }
                     }
                 }
 
@@ -229,9 +229,9 @@ fun SettingsDrawerContent(
                 .fillMaxWidth()
                 .padding(16.dp), shape = RoundedCornerShape(8.dp), elevation = 2.dp) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Score", style = MaterialTheme.typography.subtitle1)
+                    Text(text = "Score", style = MaterialTheme.typography.subtitle1)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("1234", style = MaterialTheme.typography.h4)
+                    Text(text = "1234", style = MaterialTheme.typography.h4)
                 }
             }
         }
@@ -240,7 +240,7 @@ fun SettingsDrawerContent(
             Spacer(modifier = Modifier.height(8.dp))
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Button(onClick = { Toast.makeText(ctx, "Settings saved", Toast.LENGTH_SHORT).show() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                    Text("Save & Close")
+                    Text(text = "Save & Close")
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -255,7 +255,7 @@ private fun SettingSwitchRow(title: String, checked: Boolean, onToggle: (Boolean
         .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title)
+            Text(text = title)
         }
         Switch(checked = checked, onCheckedChange = onToggle)
     }
@@ -268,6 +268,6 @@ private fun RowOption(mode: RaghuPreviewMode, selected: Boolean, onSelect: () ->
         .clickable { onSelect() }) {
         RadioButton(selected = selected, onClick = onSelect)
         Spacer(modifier = Modifier.width(8.dp))
-        Text(mode.name, modifier = Modifier.padding(start = 8.dp))
+        Text(text = mode.name, modifier = Modifier.padding(start = 8.dp))
     }
 }
