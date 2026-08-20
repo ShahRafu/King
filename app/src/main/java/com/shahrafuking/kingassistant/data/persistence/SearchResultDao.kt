@@ -11,11 +11,13 @@ interface SearchResultDao {
     @Query("SELECT * FROM search_results ORDER BY fetchedAt DESC")
     fun allResults(): Flow<List<SearchResultEntity>>
 
+    // Return inserted row ids
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(items: List<SearchResultEntity>)
+    fun insertAll(items: List<SearchResultEntity>): List<Long>
 
+    // Return number of rows deleted
     @Query("DELETE FROM search_results WHERE url = :url")
-    suspend fun deleteByUrl(url: String)
+    fun deleteByUrl(url: String): Int
 
     @Query("SELECT * FROM search_results WHERE title LIKE '%' || :q || '%' OR snippet LIKE '%' || :q || '%' ORDER BY fetchedAt DESC")
     fun search(q: String): Flow<List<SearchResultEntity>>
