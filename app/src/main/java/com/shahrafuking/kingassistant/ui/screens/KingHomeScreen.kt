@@ -41,12 +41,8 @@ fun KingHomeScreen(onSettingsSelected: (() -> Unit)? = null) {
     ModalDrawer(
         drawerState = drawerState,
         drawerContent = {
-            SettingsDrawerContent(currentMode = currentMode, onModeSelected = { mode ->
-                scope.launch {
-                    settingsRepo.setRaghuPreviewMode(mode)
-                    drawerState.close()
-                }
-            })
+            // Use the updated SettingsDrawerContent signature (ctx, settingsRepo)
+            SettingsDrawerContent(ctx = ctx, settingsRepo = settingsRepo)
         },
         gesturesEnabled = false // disable edge swipe-to-open; only Settings icon opens it
     ) {

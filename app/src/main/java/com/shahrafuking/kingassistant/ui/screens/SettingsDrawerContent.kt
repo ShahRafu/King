@@ -5,7 +5,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
@@ -15,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.ImeAction
 import coil.compose.AsyncImage
 import com.shahrafuking.kingassistant.settings.SecurePrefs
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsDrawerContent(ctx: Context, settingsRepo: SettingsRepository) {
