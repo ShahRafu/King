@@ -4,18 +4,13 @@ import android.content.Context
 import com.shahrafuking.kingassistant.data.model.SearchResult
 import com.shahrafuking.kingassistant.data.persistence.AppDatabase
 import com.shahrafuking.kingassistant.data.persistence.SearchResultEntity
-import com.shahrafuking.kingassistant.data.remote.BackendApi
-import com.shahrafuking.kingassistant.data.remote.RetrofitFactory
-import com.shahrafuking.kingassistant.settings.SecurePrefs
-import com.shahrafuking.kingassistant.ui.screens.SettingsRepository
+import com.shahrafuking.kingassistant.data.provider.BackendProxyProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class SearchRepository(private val ctx: Context) {
     private val db = AppDatabase.getInstance(ctx)
     private val dao = db.searchResultDao()
-    private val settings = SettingsRepository(ctx)
-    private val secure = SecurePrefs(ctx)
 
     fun allResults(): Flow<List<SearchResult>> = dao.allResults().map { list ->
         list.map { entity -> SearchResult(entity.url, entity.title, entity.snippet, entity.url, entity.source, entity.fetchedAt) }
@@ -26,11 +21,12 @@ class SearchRepository(private val ctx: Context) {
     }
 
     suspend fun searchRemote(provider: String, q: String, feed: String? = null, url: String? = null): List<SearchResult> {
-        val base = settings.backendUrlFlow // Flow - read single value
-        // read current backend url & token via first() to avoid long flows
-        val backendUrl = settings.backendUrlFlow // leave to caller to provide; simple approach: read via blocking isn't implemented here to keep code concise
-        // For now, build an API client using placeholder; the SearchScreen will call Retrofit directly using RetrofitFactory with values from SettingsRepository and SecurePrefs. This repository wraps DB operations.
-        return emptyList()
+        val providerImpl = BackendProxyProvider(ctx)
+        val results = providerImpl.search(provider, q, feed, url)
+        if (results.isNotEmpty()) {
+            saveResults(results)
+        }
+        return results
     }
 
     suspend fun saveResults(results: List<SearchResult>) {
