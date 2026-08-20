@@ -5,8 +5,10 @@ import com.shahrafuking.kingassistant.data.model.SearchResult
 import com.shahrafuking.kingassistant.data.persistence.AppDatabase
 import com.shahrafuking.kingassistant.data.persistence.SearchResultEntity
 import com.shahrafuking.kingassistant.data.provider.BackendProxyProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 class SearchRepository(private val ctx: Context) {
     private val db = AppDatabase.getInstance(ctx)
@@ -29,8 +31,12 @@ class SearchRepository(private val ctx: Context) {
         return results
     }
 
-    suspend fun saveResults(results: List<SearchResult>) {
+    suspend fun saveResults(results: List<SearchResult>) = withContext(Dispatchers.IO) {
         val entities = results.map { SearchResultEntity(it.url, it.title, it.snippet, it.source, it.fetchedAt) }
         dao.insertAll(entities)
+    }
+
+    suspend fun deleteByUrl(url: String) = withContext(Dispatchers.IO) {
+        dao.deleteByUrl(url)
     }
 }
