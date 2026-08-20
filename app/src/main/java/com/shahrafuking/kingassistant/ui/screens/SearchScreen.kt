@@ -55,3 +55,14 @@ fun SearchScreen(repo: SearchRepository) {
         }
     }
 }
+
+@Composable
+fun ResultItem(r: SearchResult) {
+    Column(modifier = Modifier.padding(12.dp)) {
+        Text(text = r.title, style = MaterialTheme.typography.subtitle1)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = r.snippet, style = MaterialTheme.typography.body2)
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(text = r.url, style = MaterialTheme.typography.caption)
+    }
+}

@@ -1,6 +1,7 @@
 package com.shahrafuking.kingassistant.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import kotlinx.coroutines.channels.awaitClose
@@ -30,7 +31,7 @@ class SecurePrefs(private val ctx: Context) {
     }
 
     fun tokenFlow(): Flow<String> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefsRef: SharedPreferences, key: String? ->
             if (key == KEY_BACKEND_TOKEN) trySend(getToken())
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
