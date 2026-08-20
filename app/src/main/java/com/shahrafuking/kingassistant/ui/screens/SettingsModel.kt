@@ -34,6 +34,9 @@ object SettingsKeys {
     val ADV_BIO_EYE = booleanPreferencesKey("adv_bio_eye")
     val ADV_BIO_VOICE = booleanPreferencesKey("adv_bio_voice")
     val ADV_BIO_VIBRATION = booleanPreferencesKey("adv_bio_vibration")
+
+    // new persistent language key
+    val APP_LANGUAGE = stringPreferencesKey("app_language")
 }
 
 class SettingsRepository(private val ctx: Context) {
@@ -57,6 +60,9 @@ class SettingsRepository(private val ctx: Context) {
     val advBioVoiceFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VOICE] ?: false }
     val advBioVibrationFlow: Flow<Boolean> = ctx.dataStore.data.map { it[SettingsKeys.ADV_BIO_VIBRATION] ?: false }
 
+    // NEW: persistent flow for app language
+    val appLanguageFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "English" }
+
     suspend fun setRaghuPreviewMode(mode: RaghuPreviewMode) = ctx.dataStore.edit { it[SettingsKeys.RAGHU_PREVIEW_MODE] = mode.value }
     suspend fun setNewFileStatus(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.NEW_FILE_STATUS] = v }
     suspend fun setArchiveAutoSave(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ARCHIVE_AUTOSAVE] = v }
@@ -69,6 +75,9 @@ class SettingsRepository(private val ctx: Context) {
     suspend fun setPermissionAutoFix(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.PERMISSION_AUTOFIX] = v }
     suspend fun setRecoverySync(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.RECOVERY_SYNC] = v }
     suspend fun setAppLogoUri(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LOGO_URI] = v }
+
+    // NEW: setter for app language
+    suspend fun setAppLanguage(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LANGUAGE] = v }
 
     suspend fun setAdvBioEye(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_EYE] = v }
     suspend fun setAdvBioVoice(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VOICE] = v }
