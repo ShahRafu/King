@@ -112,6 +112,9 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
     implementation 'com.google.code.gson:gson:2.10.1'
 
+    // Coil for image loading in Compose (logo preview)
+    implementation 'io.coil-kt:coil-compose:2.4.0'
+
     // CameraX
     implementation 'androidx.camera:camera-core:1.2.2'
     implementation 'androidx.camera:camera-camera2:1.2.2'
