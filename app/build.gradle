@@ -1,12 +1,11 @@
 diff --git a/app/build.gradle b/app/build.gradle
-index 0000000..0000000 100644
+index 370f736..370f736 100644
 --- a/app/build.gradle
 +++ b/app/build.gradle
 @@
-     // Networking
-     implementation 'com.squareup.okhttp3:okhttp:4.11.0'
-     implementation 'com.squareup.okio:okio:3.6.0'
-+    // Retrofit
-+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-+    implementation 'com.google.code.gson:gson:2.10.1'
+     // Debug tooling
+     debugImplementation 'androidx.compose.ui:ui-tooling'
+     debugImplementation 'androidx.compose.ui:ui-test-manifest'
++    // Coil for image loading in Compose (logo preview)
++    implementation 'io.coil-kt:coil-compose:2.4.0'
+ }
