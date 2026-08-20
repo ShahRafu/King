@@ -35,8 +35,12 @@ object SettingsKeys {
     val ADV_BIO_VOICE = booleanPreferencesKey("adv_bio_voice")
     val ADV_BIO_VIBRATION = booleanPreferencesKey("adv_bio_vibration")
 
-    // new persistent language key
+    // persistent language key
     val APP_LANGUAGE = stringPreferencesKey("app_language")
+
+    // backend proxy config
+    val BACKEND_URL = stringPreferencesKey("backend_url")
+    val BACKEND_TOKEN = stringPreferencesKey("backend_token")
 }
 
 class SettingsRepository(private val ctx: Context) {
@@ -63,6 +67,10 @@ class SettingsRepository(private val ctx: Context) {
     // NEW: persistent flow for app language
     val appLanguageFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "English" }
 
+    // NEW: backend config flows
+    val backendUrlFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.BACKEND_URL] ?: "" }
+    val backendTokenFlow: Flow<String> = ctx.dataStore.data.map { it[SettingsKeys.BACKEND_TOKEN] ?: "" }
+
     suspend fun setRaghuPreviewMode(mode: RaghuPreviewMode) = ctx.dataStore.edit { it[SettingsKeys.RAGHU_PREVIEW_MODE] = mode.value }
     suspend fun setNewFileStatus(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.NEW_FILE_STATUS] = v }
     suspend fun setArchiveAutoSave(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ARCHIVE_AUTOSAVE] = v }
@@ -76,8 +84,10 @@ class SettingsRepository(private val ctx: Context) {
     suspend fun setRecoverySync(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.RECOVERY_SYNC] = v }
     suspend fun setAppLogoUri(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LOGO_URI] = v }
 
-    // NEW: setter for app language
+    // NEW: setters for app language and backend config
     suspend fun setAppLanguage(v: String) = ctx.dataStore.edit { it[SettingsKeys.APP_LANGUAGE] = v }
+    suspend fun setBackendUrl(v: String) = ctx.dataStore.edit { it[SettingsKeys.BACKEND_URL] = v }
+    suspend fun setBackendToken(v: String) = ctx.dataStore.edit { it[SettingsKeys.BACKEND_TOKEN] = v }
 
     suspend fun setAdvBioEye(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_EYE] = v }
     suspend fun setAdvBioVoice(v: Boolean) = ctx.dataStore.edit { it[SettingsKeys.ADV_BIO_VOICE] = v }
